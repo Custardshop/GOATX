@@ -33,20 +33,8 @@ if ($consoleHandle -ne [IntPtr]::Zero) {
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-# --- 3. Double-buffered form ---
-Add-Type @"
-using System.Windows.Forms;
-public class GoatxForm : Form {
-    public GoatxForm() {
-        this.SetStyle(
-            ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.AllPaintingInWmPaint, true);
-    }
-}
-"@
-
 # ============================================================
-# --- 4. Tweak scriptblocks ---
+# --- 3. Tweak scriptblocks ---
 # ============================================================
 
 $Tweak_KernelHPET = {
@@ -320,7 +308,7 @@ MouseExclusive=1
     Add-Content $winIni "`r`n$ini"
 }
 
-# --- 5. Tweak registry ---
+# --- 4. Tweak registry ---
 $AllTweaks = [ordered]@{
     "[01] Kernel and HPET"             = $Tweak_KernelHPET
     "[02] Timer Resolution"            = $Tweak_TimerResolution
@@ -344,138 +332,7 @@ $AllTweaks = [ordered]@{
 }
 
 # ============================================================
-# --- 6. GUI State ---
-# ============================================================
-
-$script:selectedIndex = 0
-$script:isRunning     = $false
-$script:optionCount   = 2
-$script:labelControls = @()
-$script:borderOffset  = 0.0
-$script:breathPhase   = 0.0
-$script:options = @(
-    @{ Label = "[1] High"; Action = "high" }
-    @{ Label = "[2] Exit"; Action = "exit" }
-)
-
-# ============================================================
-# --- 7. Create Form ---
-# ============================================================
-
-$form = New-Object GoatxForm
-$form.Text            = "GOATX"
-$form.Size            = New-Object System.Drawing.Size(460, 280)
-$form.StartPosition   = "CenterScreen"
-$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
-$form.BackColor       = [System.Drawing.Color]::Black
-$form.Opacity         = 0.80
-$form.TopMost         = $true
-$form.KeyPreview      = $true
-
-# Center panel (content sits here, leaving room for border glow)
-$borderPad = 8
-$panel = New-Object System.Windows.Forms.Panel
-$panel.Location  = New-Object System.Drawing.Point($borderPad, $borderPad)
-$panel.Size      = New-Object System.Drawing.Size(($form.ClientSize.Width - $borderPad * 2), ($form.ClientSize.Height - $borderPad * 2))
-$panel.BackColor = [System.Drawing.Color]::FromArgb(17, 17, 17)
-$panel.TabStop   = $true
-$form.Controls.Add($panel)
-
-# ============================================================
-# --- 8. Animated Border Paint (on form, around panel) ---
-# ============================================================
-
-$form.Add_Paint({
-    param($s, $e)
-    $g = $e.Graphics
-    $g.SmoothingMode = 'AntiAlias'
-
-    $w = $s.ClientSize.Width
-    $h = $s.ClientSize.Height
-
-    # Breathing alpha (pulse 80-255)
-    $breathAlpha = [math]::Round(80 + 175 * (0.5 + 0.5 * [math]::Sin($script:breathPhase)))
-
-    # Draw multiple glow layers (outer glow)
-    $glowLayers = 4
-    for ($layer = $glowLayers; $layer -ge 1; $layer--) {
-        $inset  = $layer * 2
-        $alpha  = [math]::Round($breathAlpha * (0.15 / $layer))
-
-        # Gradient along perimeter using hue rotation
-        # Top edge
-        $steps = 60
-        for ($i = 0; $i -lt $steps; $i++) {
-            $frac = $i / $steps
-            $hue = ($script:borderOffset + $frac * 360) % 360
-            $c = HSL-ToRGB $hue 1.0 0.55
-            $color = [System.Drawing.Color]::FromArgb($alpha, $c[0], $c[1], $c[2])
-            $pen = New-Object System.Drawing.Pen($color, 2)
-
-            $x1 = [math]::Round($inset + ($w - 2 * $inset) * $frac)
-            $x2 = [math]::Round($inset + ($w - 2 * $inset) * (($i + 1) / $steps))
-            $g.DrawLine($pen, $x1, $inset, $x2, $inset)
-            $pen.Dispose()
-        }
-        # Right edge
-        for ($i = 0; $i -lt $steps; $i++) {
-            $frac = $i / $steps
-            $hue = ($script:borderOffset + 90 + $frac * 360) % 360
-            $c = HSL-ToRGB $hue 1.0 0.55
-            $color = [System.Drawing.Color]::FromArgb($alpha, $c[0], $c[1], $c[2])
-            $pen = New-Object System.Drawing.Pen($color, 2)
-            $y1 = [math]::Round($inset + ($h - 2 * $inset) * $frac)
-            $y2 = [math]::Round($inset + ($h - 2 * $inset) * (($i + 1) / $steps))
-            $g.DrawLine($pen, ($w - $inset), $y1, ($w - $inset), $y2)
-            $pen.Dispose()
-        }
-        # Bottom edge
-        for ($i = 0; $i -lt $steps; $i++) {
-            $frac = $i / $steps
-            $hue = ($script:borderOffset + 180 + $frac * 360) % 360
-            $c = HSL-ToRGB $hue 1.0 0.55
-            $color = [System.Drawing.Color]::FromArgb($alpha, $c[0], $c[1], $c[2])
-            $pen = New-Object System.Drawing.Pen($color, 2)
-            $x1 = [math]::Round(($w - $inset) - ($w - 2 * $inset) * $frac)
-            $x2 = [math]::Round(($w - $inset) - ($w - 2 * $inset) * (($i + 1) / $steps))
-            $g.DrawLine($pen, $x1, ($h - $inset), $x2, ($h - $inset))
-            $pen.Dispose()
-        }
-        # Left edge
-        for ($i = 0; $i -lt $steps; $i++) {
-            $frac = $i / $steps
-            $hue = ($script:borderOffset + 270 + $frac * 360) % 360
-            $c = HSL-ToRGB $hue 1.0 0.55
-            $color = [System.Drawing.Color]::FromArgb($alpha, $c[0], $c[1], $c[2])
-            $pen = New-Object System.Drawing.Pen($color, 2)
-            $y1 = [math]::Round(($h - $inset) - ($h - 2 * $inset) * $frac)
-            $y2 = [math]::Round(($h - $inset) - ($h - 2 * $inset) * (($i + 1) / $steps))
-            $g.DrawLine($pen, $inset, $y1, $inset, $y2)
-            $pen.Dispose()
-        }
-    }
-
-    # Inner sharp border (1px bright line)
-    $innerAlpha = [math]::Min(255, $breathAlpha + 60)
-    for ($i = 0; $i -lt 4; $i++) {
-        $frac = $i / 4
-        $hue = ($script:borderOffset + $frac * 360) % 360
-        $c = HSL-ToRGB $hue 1.0 0.7
-        $color = [System.Drawing.Color]::FromArgb($innerAlpha, $c[0], $c[1], $c[2])
-        $pen = New-Object System.Drawing.Pen($color, 1)
-
-        switch ($i) {
-            0 { $g.DrawLine($pen, $borderPad, $borderPad, ($w - $borderPad), $borderPad) }
-            1 { $g.DrawLine($pen, ($w - $borderPad), $borderPad, ($w - $borderPad), ($h - $borderPad)) }
-            2 { $g.DrawLine($pen, ($w - $borderPad), ($h - $borderPad), $borderPad, ($h - $borderPad)) }
-            3 { $g.DrawLine($pen, $borderPad, ($h - $borderPad), $borderPad, $borderPad) }
-        }
-        $pen.Dispose()
-    }
-})
-
-# ============================================================
-# --- 9. HSL to RGB helper ---
+# --- 5. HSL-to-RGB helper (defined BEFORE Paint uses it) ---
 # ============================================================
 
 function HSL-ToRGB {
@@ -498,34 +355,165 @@ function HSL-ToRGB {
 }
 
 # ============================================================
-# --- 10. Animation Timer (~60 FPS) ---
+# --- 6. GUI State ---
+# ============================================================
+
+$script:selectedIndex = 0
+$script:isRunning     = $false
+$script:optionCount   = 2
+$script:labelControls = @()
+$script:borderHue     = 0.0
+$script:breathPhase   = 0.0
+$script:options = @(
+    @{ Label = "[1] High"; Action = "high" }
+    @{ Label = "[2] Exit"; Action = "exit" }
+)
+
+# ============================================================
+# --- 7. Create Form (standard Form + double-buffer via reflection) ---
+# ============================================================
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text            = "GOATX"
+$form.Size            = New-Object System.Drawing.Size(460, 280)
+$form.StartPosition   = "CenterScreen"
+$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+$form.BackColor       = [System.Drawing.Color]::Black
+$form.Opacity         = 0.80
+$form.TopMost         = $true
+$form.KeyPreview      = $true
+
+# Enable double buffering via reflection (no need for custom C# class)
+$form.GetType().InvokeMember(
+    "DoubleBuffered",
+    [System.Reflection.BindingFlags]::SetProperty -bor
+    [System.Reflection.BindingFlags]::Instance -bor
+    [System.Reflection.BindingFlags]::NonPublic,
+    $null, $form, $true
+)
+
+# ============================================================
+# --- 8. Center panel ---
+# ============================================================
+
+$borderPad = 6
+$panel = New-Object System.Windows.Forms.Panel
+$panel.Location  = New-Object System.Drawing.Point($borderPad, $borderPad)
+$panel.Size      = New-Object System.Drawing.Size(
+    ($form.ClientSize.Width  - $borderPad * 2),
+    ($form.ClientSize.Height - $borderPad * 2)
+)
+$panel.BackColor = [System.Drawing.Color]::FromArgb(17, 17, 17)
+$panel.TabStop   = $true
+$form.Controls.Add($panel)
+
+# ============================================================
+# --- 9. Pre-compute rainbow pen array (cached for performance) ---
+# ============================================================
+
+$script:rainbowPens = @()
+$script:glowPens    = @()
+$rainbowSteps = 120
+
+for ($i = 0; $i -lt $rainbowSteps; $i++) {
+    $hue = ($i / $rainbowSteps) * 360
+    $rgb = HSL-ToRGB $hue 1.0 0.6
+    $script:rainbowPens += New-Object System.Drawing.Pen(
+        [System.Drawing.Color]::FromArgb(255, $rgb[0], $rgb[1], $rgb[2]), 1
+    )
+    # Glow (dimmer, wider)
+    $script:glowPens += New-Object System.Drawing.Pen(
+        [System.Drawing.Color]::FromArgb(60, $rgb[0], $rgb[1], $rgb[2]), 3
+    )
+}
+
+# ============================================================
+# --- 10. Animated Border Paint ---
+# ============================================================
+
+$form.Add_Paint({
+    param($s, $e)
+    $g = $e.Graphics
+    $g.SmoothingMode = 'AntiAlias'
+    $w = $s.ClientSize.Width
+    $h = $s.ClientSize.Height
+
+    # Breathing alpha 120-240
+    $ba = [math]::Round(120 + 120 * (0.5 + 0.5 * [math]::Sin($script:breathPhase)))
+    $glowAlpha = [math]::Round($ba * 0.35)
+    $coreAlpha = [math]::Min(255, $ba + 40)
+
+    $p = $borderPad
+    $ow = $w - 2 * $p  # inner width
+    $oh = $h - 2 * $p  # inner height
+    $perimeter = 2 * ($ow + $oh)
+
+    $steps = 80
+    for ($i = 0; $i -lt $steps; $i++) {
+        $t1 = $i / $steps
+        $t2 = ($i + 1) / $steps
+
+        # Position along perimeter
+        $d1 = $t1 * $perimeter
+        $d2 = $t2 * $perimeter
+
+        # Hue for this segment
+        $idx1 = [math]::Floor((($script:borderHue / 360 + $t1) % 1.0) * $rainbowSteps)
+        $idx2 = [math]::Floor((($script:borderHue / 360 + $t2) % 1.0) * $rainbowSteps)
+
+        # Glow layer
+        $gp = $script:glowPens[[int]([math]::Min($idx1, $rainbowSteps - 1))]
+        $gp.Color = [System.Drawing.Color]::FromArgb($glowAlpha, $gp.Color.R, $gp.Color.G, $gp.Color.B)
+        $p1g = Get-PointOnRect $d1 $perimeter $ow $oh $p
+        $p2g = Get-PointOnRect $d2 $perimeter $ow $oh $p
+        $g.DrawLine($gp, $p1g[0], $p1g[1], $p2g[0], $p2g[1])
+
+        # Core layer
+        $cp = $script:rainbowPens[[int]([math]::Min($idx1, $rainbowSteps - 1))]
+        $cp.Color = [System.Drawing.Color]::FromArgb($coreAlpha, $cp.Color.R, $cp.Color.G, $cp.Color.B)
+        $g.DrawLine($cp, $p1g[0], $p1g[1], $p2g[0], $p2g[1])
+    }
+})
+
+# Helper: point along rectangle perimeter
+function Get-PointOnRect {
+    param([double]$dist, [double]$perimeter, [double]$ow, [double]$oh, [int]$inset)
+    $d = $dist % $perimeter
+    if     ($d -lt $ow)                        { return @($inset + $d,          $inset) }
+    elseif ($d -lt $ow + $oh)                  { return @($inset + $ow,         $inset + ($d - $ow)) }
+    elseif ($d -lt $ow + $oh + $ow)            { return @($inset + $ow - ($d - $ow - $oh), $inset + $oh) }
+    else                                        { return @($inset,               $inset + $oh - ($d - 2*$ow - $oh)) }
+}
+
+# ============================================================
+# --- 11. Animation Timer (~40 FPS, balanced for PS perf) ---
 # ============================================================
 
 $timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 16
+$timer.Interval = 25
 $timer.Add_Tick({
-    $script:borderOffset = ($script:borderOffset + 1.5) % 360
-    $script:breathPhase  += 0.03
+    $script:borderHue    = ($script:borderHue + 2.0) % 360
+    $script:breathPhase += 0.04
     $form.Invalidate()
 })
 $timer.Start()
 
 # ============================================================
-# --- 11. Drag support ---
+# --- 12. Drag support ---
 # ============================================================
 
 $script:dragging  = $false
 $script:dragStart = New-Object System.Drawing.Point(0, 0)
 
 $dragDown = {
-    param($s, $e)
+    param($sender, $e)
     if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
         $script:dragging  = $true
         $script:dragStart = New-Object System.Drawing.Point($e.X, $e.Y)
     }
 }
 $dragMove = {
-    param($s, $e)
+    param($sender, $e)
     if ($script:dragging) {
         $form.Location = New-Object System.Drawing.Point(
             ($form.Location.X + $e.X - $script:dragStart.X),
@@ -543,23 +531,20 @@ $panel.Add_MouseMove($dragMove)
 $panel.Add_MouseUp($dragUp)
 
 # ============================================================
-# --- 12. UI Labels ---
+# --- 13. UI Labels ---
 # ============================================================
 
-# Fonts
 $fontTitle = New-Object System.Drawing.Font("Consolas", 22, [System.Drawing.FontStyle]::Bold)
 $fontSub   = New-Object System.Drawing.Font("Consolas", 9.5)
 $fontOpt   = New-Object System.Drawing.Font("Consolas", 12)
 $fontHint  = New-Object System.Drawing.Font("Consolas", 8)
 
-# Colors
 $clrTitle  = [System.Drawing.Color]::FromArgb(184, 220, 240)
 $clrSub    = [System.Drawing.Color]::FromArgb(160, 160, 160)
 $clrOptDim = [System.Drawing.Color]::FromArgb(150, 150, 150)
 $clrOptHi  = [System.Drawing.Color]::FromArgb(130, 255, 130)
 $clrHint   = [System.Drawing.Color]::FromArgb(90, 90, 90)
 
-# Helper
 function New-DragLabel {
     param($text, $font, $color, $x, $y, $w, $h, $align)
     $lbl = New-Object System.Windows.Forms.Label
@@ -578,15 +563,11 @@ function New-DragLabel {
     return $lbl
 }
 
-# Title (2 lines)
-New-DragLabel "G O A T X" $fontTitle $clrTitle 5 8  428 42 "MiddleCenter" | Out-Null
-New-DragLabel "G O A T X" $fontTitle $clrTitle 5 50 428 42 "MiddleCenter" | Out-Null
+New-DragLabel "G O A T X" $fontTitle $clrTitle 5 10 432 42 "MiddleCenter" | Out-Null
+New-DragLabel "G O A T X" $fontTitle $clrTitle 5 52 432 42 "MiddleCenter" | Out-Null
+New-DragLabel "[+] CMD GOATX BY CUSTARD [+]" $fontSub $clrSub 5 98 432 20 "MiddleCenter" | Out-Null
 
-# Subtitle
-New-DragLabel "[+] CMD GOATX BY CUSTARD [+]" $fontSub $clrSub 5 96 428 20 "MiddleCenter" | Out-Null
-
-# Options
-$optStartY = 130
+$optStartY  = 132
 $optSpacing = 34
 
 for ($i = 0; $i -lt $script:optionCount; $i++) {
@@ -595,7 +576,7 @@ for ($i = 0; $i -lt $script:optionCount; $i++) {
     $lbl.Font      = $fontOpt
     $lbl.ForeColor = $clrOptDim
     $lbl.AutoSize  = $false
-    $lbl.Size      = New-Object System.Drawing.Size(428, 30)
+    $lbl.Size      = New-Object System.Drawing.Size(432, 30)
     $lbl.Location  = New-Object System.Drawing.Point(5, ($optStartY + $i * $optSpacing))
     $lbl.TextAlign = "MiddleCenter"
     $lbl.BackColor = [System.Drawing.Color]::Transparent
@@ -613,11 +594,10 @@ for ($i = 0; $i -lt $script:optionCount; $i++) {
     $script:labelControls += $lbl
 }
 
-# Hint
-New-DragLabel "Scroll to navigate, Enter to select" $fontHint $clrHint 5 210 428 16 "MiddleCenter" | Out-Null
+New-DragLabel "Scroll to navigate, Enter to select" $fontHint $clrHint 5 212 432 16 "MiddleCenter" | Out-Null
 
 # ============================================================
-# --- 13. Highlight ---
+# --- 14. Highlight ---
 # ============================================================
 
 function Update-Highlight {
@@ -633,7 +613,7 @@ function Update-Highlight {
 }
 
 # ============================================================
-# --- 14. Execute ---
+# --- 15. Execute ---
 # ============================================================
 
 function Execute-Selection {
@@ -664,7 +644,7 @@ function Execute-Selection {
 }
 
 # ============================================================
-# --- 15. Keyboard ---
+# --- 16. Keyboard ---
 # ============================================================
 
 $form.Add_KeyDown({
@@ -687,7 +667,7 @@ $form.Add_KeyDown({
 })
 
 # ============================================================
-# --- 16. Scroll wheel ---
+# --- 17. Scroll wheel ---
 # ============================================================
 
 $scrollHandler = {
@@ -708,7 +688,7 @@ foreach ($ctrl in $panel.Controls) {
 }
 
 # ============================================================
-# --- 17. Init & Run ---
+# --- 18. Init & Run ---
 # ============================================================
 
 $form.Add_Shown({ $panel.Focus() })
