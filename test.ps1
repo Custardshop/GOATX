@@ -1,11 +1,11 @@
 <#
 ============================================================
-  GOATX - Windows Performance Tweaks GUI
-  Terminal overlay + animated neon rainbow gradient border
+  Windows Performance Tweaks - GUI (WinForms, terminal look)
+  แก้ไข: Title+Subtitle gradient paint, Options เป็น Label สี match gradient
 ============================================================
 #>
 
-# --- 1. Admin check ---
+# --- 1. ตรวจสอบสิทธิ์ Administrator ---
 $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -18,7 +18,6 @@ if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adm
     exit
 }
 
-# --- 2. Hide console ---
 Add-Type -Name Win32ShowWindow -Namespace Native -MemberDefinition @"
 [DllImport("user32.dll")]
 public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -34,7 +33,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # ============================================================
-# --- 3. Tweak scriptblocks ---
+# --- 2. กลุ่ม tweak ทั้งหมด ---
 # ============================================================
 
 $Tweak_KernelHPET = {
@@ -308,7 +307,10 @@ MouseExclusive=1
     Add-Content $winIni "`r`n$ini"
 }
 
-# --- 4. Tweak registry ---
+# ============================================================
+# --- 3. รายการปุ่ม ---
+# ============================================================
+
 $AllTweaks = [ordered]@{
     "[01] Kernel and HPET"             = $Tweak_KernelHPET
     "[02] Timer Resolution"            = $Tweak_TimerResolution
@@ -332,253 +334,165 @@ $AllTweaks = [ordered]@{
 }
 
 # ============================================================
-# --- 5. HSL-to-RGB helper (defined BEFORE Paint uses it) ---
+# --- 4. GUI ---
 # ============================================================
 
-function HSL-ToRGB {
-    param([double]$h, [double]$s, [double]$l)
-    $c = (1 - [math]::Abs(2 * $l - 1)) * $s
-    $x = $c * (1 - [math]::Abs((($h / 60) % 2) - 1))
-    $m = $l - $c / 2
-    $r = 0; $g = 0; $b = 0
-    if     ($h -lt 60)  { $r = $c; $g = $x; $b = 0 }
-    elseif ($h -lt 120) { $r = $x; $g = $c; $b = 0 }
-    elseif ($h -lt 180) { $r = 0; $g = $c; $b = $x }
-    elseif ($h -lt 240) { $r = 0; $g = $x; $b = $c }
-    elseif ($h -lt 300) { $r = $x; $g = 0; $b = $c }
-    else                { $r = $c; $g = 0; $b = $x }
-    return @(
-        [math]::Min(255, [math]::Round(($r + $m) * 255)),
-        [math]::Min(255, [math]::Round(($g + $m) * 255)),
-        [math]::Min(255, [math]::Round(($b + $m) * 255))
-    )
-}
-
-# ============================================================
-# --- 6. GUI State ---
-# ============================================================
-
+# State
 $script:selectedIndex = 0
 $script:isRunning     = $false
 $script:optionCount   = 2
 $script:labelControls = @()
-$script:borderHue     = 0.0
-$script:breathPhase   = 0.0
 $script:options = @(
     @{ Label = "[1] High"; Action = "high" }
     @{ Label = "[2] Exit"; Action = "exit" }
 )
 
-# ============================================================
-# --- 7. Create Form (standard Form + double-buffer via reflection) ---
-# ============================================================
+# --- สี Gradient ทั้งหมด ---
+# สีสว่าง (selected / title)
+$script:GradBright = @(
+    [System.Drawing.Color]::FromArgb(80, 200, 255),
+    [System.Drawing.Color]::FromArgb(180, 120, 255),
+    [System.Drawing.Color]::FromArgb(255, 120, 180)
+)
+# สีกลาง (subtitle)
+$script:GradMid = @(
+    [System.Drawing.Color]::FromArgb(100, 180, 220),
+    [System.Drawing.Color]::FromArgb(160, 130, 220),
+    [System.Drawing.Color]::FromArgb(220, 140, 190)
+)
+# สีมืด (unselected option) — ต้องสว่างพอให้เห็นชัดที่ opacity 0.65
+$script:GradDim = @(
+    [System.Drawing.Color]::FromArgb(60, 110, 140),
+    [System.Drawing.Color]::FromArgb(110, 70, 140),
+    [System.Drawing.Color]::FromArgb(140, 70, 100)
+)
+$script:GradPos = @(0.0, 0.5, 1.0)
 
+# สี hint
+$clrBg   = [System.Drawing.Color]::Black
+$clrHint = [System.Drawing.Color]::FromArgb(120, 120, 120)
+
+# --- สร้างหน้าต่าง ---
 $form = New-Object System.Windows.Forms.Form
 $form.Text            = "GOATX"
-$form.Size            = New-Object System.Drawing.Size(460, 280)
 $form.StartPosition   = "CenterScreen"
-$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
-$form.BackColor       = [System.Drawing.Color]::Black
-$form.Opacity         = 0.80
+$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
+$form.MaximizeBox     = $false
+$form.BackColor       = $clrBg
 $form.TopMost         = $true
 $form.KeyPreview      = $true
+$form.Opacity         = 0.65
+$form.ClientSize      = New-Object System.Drawing.Size(450, 235)
 
-# Enable double buffering via reflection (no need for custom C# class)
-$form.GetType().InvokeMember(
-    "DoubleBuffered",
-    [System.Reflection.BindingFlags]::SetProperty -bor
-    [System.Reflection.BindingFlags]::Instance -bor
-    [System.Reflection.BindingFlags]::NonPublic,
-    $null, $form, $true
-)
-
-# ============================================================
-# --- 8. Center panel ---
-# ============================================================
-
-$borderPad = 6
+# Panel
 $panel = New-Object System.Windows.Forms.Panel
-$panel.Location  = New-Object System.Drawing.Point($borderPad, $borderPad)
-$panel.Size      = New-Object System.Drawing.Size(
-    ($form.ClientSize.Width  - $borderPad * 2),
-    ($form.ClientSize.Height - $borderPad * 2)
-)
-$panel.BackColor = [System.Drawing.Color]::FromArgb(17, 17, 17)
+$panel.Dock      = "Fill"
+$panel.BackColor = $clrBg
 $panel.TabStop   = $true
 $form.Controls.Add($panel)
 
 # ============================================================
-# --- 9. Pre-compute rainbow pen array (cached for performance) ---
+# Helper: สร้าง gradient text panel (สำหรับ title + subtitle)
 # ============================================================
-
-$script:rainbowPens = @()
-$script:glowPens    = @()
-$rainbowSteps = 120
-
-for ($i = 0; $i -lt $rainbowSteps; $i++) {
-    $hue = ($i / $rainbowSteps) * 360
-    $rgb = HSL-ToRGB $hue 1.0 0.6
-    $script:rainbowPens += New-Object System.Drawing.Pen(
-        [System.Drawing.Color]::FromArgb(255, $rgb[0], $rgb[1], $rgb[2]), 1
+function New-GradientLabel {
+    param(
+        [string]$text,
+        [float]$fontSize,
+        [System.Drawing.FontStyle]$style,
+        [System.Drawing.Color[]]$colors,
+        [float[]]$positions,
+        [int]$x, [int]$y, [int]$w, [int]$h
     )
-    # Glow (dimmer, wider)
-    $script:glowPens += New-Object System.Drawing.Pen(
-        [System.Drawing.Color]::FromArgb(60, $rgb[0], $rgb[1], $rgb[2]), 3
-    )
-}
+    $pnl = New-Object System.Windows.Forms.Panel
+    $pnl.Size      = New-Object System.Drawing.Size($w, $h)
+    $pnl.Location  = New-Object System.Drawing.Point($x, $y)
+    $pnl.BackColor = [System.Drawing.Color]::Transparent
 
-# ============================================================
-# --- 10. Animated Border Paint ---
-# ============================================================
-
-$form.Add_Paint({
-    param($s, $e)
-    $g = $e.Graphics
-    $g.SmoothingMode = 'AntiAlias'
-    $w = $s.ClientSize.Width
-    $h = $s.ClientSize.Height
-
-    # Breathing alpha 120-240
-    $ba = [math]::Round(120 + 120 * (0.5 + 0.5 * [math]::Sin($script:breathPhase)))
-    $glowAlpha = [math]::Round($ba * 0.35)
-    $coreAlpha = [math]::Min(255, $ba + 40)
-
-    $p = $borderPad
-    $ow = $w - 2 * $p  # inner width
-    $oh = $h - 2 * $p  # inner height
-    $perimeter = 2 * ($ow + $oh)
-
-    $steps = 80
-    for ($i = 0; $i -lt $steps; $i++) {
-        $t1 = $i / $steps
-        $t2 = ($i + 1) / $steps
-
-        # Position along perimeter
-        $d1 = $t1 * $perimeter
-        $d2 = $t2 * $perimeter
-
-        # Hue for this segment
-        $idx1 = [math]::Floor((($script:borderHue / 360 + $t1) % 1.0) * $rainbowSteps)
-        $idx2 = [math]::Floor((($script:borderHue / 360 + $t2) % 1.0) * $rainbowSteps)
-
-        # Glow layer
-        $gp = $script:glowPens[[int]([math]::Min($idx1, $rainbowSteps - 1))]
-        $gp.Color = [System.Drawing.Color]::FromArgb($glowAlpha, $gp.Color.R, $gp.Color.G, $gp.Color.B)
-        $p1g = Get-PointOnRect $d1 $perimeter $ow $oh $p
-        $p2g = Get-PointOnRect $d2 $perimeter $ow $oh $p
-        $g.DrawLine($gp, $p1g[0], $p1g[1], $p2g[0], $p2g[1])
-
-        # Core layer
-        $cp = $script:rainbowPens[[int]([math]::Min($idx1, $rainbowSteps - 1))]
-        $cp.Color = [System.Drawing.Color]::FromArgb($coreAlpha, $cp.Color.R, $cp.Color.G, $cp.Color.B)
-        $g.DrawLine($cp, $p1g[0], $p1g[1], $p2g[0], $p2g[1])
+    # เก็บ parameter ไว้ใน hashtable แล้ว attach ไปกับ panel
+    $drawParams = @{
+        Text      = $text
+        FontSize  = $fontSize
+        Style     = $style
+        Colors    = $colors
+        Positions = $positions
     }
-})
+    $pnl.Tag = $drawParams
 
-# Helper: point along rectangle perimeter
-function Get-PointOnRect {
-    param([double]$dist, [double]$perimeter, [double]$ow, [double]$oh, [int]$inset)
-    $d = $dist % $perimeter
-    if     ($d -lt $ow)                        { return @($inset + $d,          $inset) }
-    elseif ($d -lt $ow + $oh)                  { return @($inset + $ow,         $inset + ($d - $ow)) }
-    elseif ($d -lt $ow + $oh + $ow)            { return @($inset + $ow - ($d - $ow - $oh), $inset + $oh) }
-    else                                        { return @($inset,               $inset + $oh - ($d - 2*$ow - $oh)) }
-}
+    $pnl.Add_Paint({
+        param($s, $e)
+        $dp     = $s.Tag
+        $font   = New-Object System.Drawing.Font("Consolas", $dp.FontSize, $dp.Style)
+        $colors = $dp.Colors
+        $pos    = $dp.Positions
 
-# ============================================================
-# --- 11. Animation Timer (~40 FPS, balanced for PS perf) ---
-# ============================================================
+        $e.Graphics.SmoothingMode     = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $e.Graphics.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAlias
 
-$timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 25
-$timer.Add_Tick({
-    $script:borderHue    = ($script:borderHue + 2.0) % 360
-    $script:breathPhase += 0.04
-    $form.Invalidate()
-})
-$timer.Start()
-
-# ============================================================
-# --- 12. Drag support ---
-# ============================================================
-
-$script:dragging  = $false
-$script:dragStart = New-Object System.Drawing.Point(0, 0)
-
-$dragDown = {
-    param($sender, $e)
-    if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
-        $script:dragging  = $true
-        $script:dragStart = New-Object System.Drawing.Point($e.X, $e.Y)
-    }
-}
-$dragMove = {
-    param($sender, $e)
-    if ($script:dragging) {
-        $form.Location = New-Object System.Drawing.Point(
-            ($form.Location.X + $e.X - $script:dragStart.X),
-            ($form.Location.Y + $e.Y - $script:dragStart.Y)
+        $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+            (New-Object System.Drawing.Point(0, 0)),
+            (New-Object System.Drawing.Point($s.Width, 0)),
+            $colors[0], $colors[$colors.Length - 1]
         )
-    }
-}
-$dragUp = { $script:dragging = $false }
+        if ($colors.Length -gt 2) {
+            $blend = New-Object System.Drawing.Drawing2D.ColorBlend
+            $blend.Colors    = $colors
+            $blend.Positions = $pos
+            $brush.InterpolationColors = $blend
+        }
 
-$form.Add_MouseDown($dragDown)
-$form.Add_MouseMove($dragMove)
-$form.Add_MouseUp($dragUp)
-$panel.Add_MouseDown($dragDown)
-$panel.Add_MouseMove($dragMove)
-$panel.Add_MouseUp($dragUp)
+        $sf  = New-Object System.Drawing.StringFormat
+        $sf.Alignment     = [System.Drawing.StringAlignment]::Center
+        $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
 
-# ============================================================
-# --- 13. UI Labels ---
-# ============================================================
+        $rect = New-Object System.Drawing.RectangleF(0, 0, $s.Width, $s.Height)
+        $e.Graphics.DrawString($dp.Text, $font, $brush, $rect, $sf)
 
-$fontTitle = New-Object System.Drawing.Font("Consolas", 22, [System.Drawing.FontStyle]::Bold)
-$fontSub   = New-Object System.Drawing.Font("Consolas", 9.5)
-$fontOpt   = New-Object System.Drawing.Font("Consolas", 12)
-$fontHint  = New-Object System.Drawing.Font("Consolas", 8)
+        $brush.Dispose(); $font.Dispose(); $sf.Dispose()
+    })
 
-$clrTitle  = [System.Drawing.Color]::FromArgb(184, 220, 240)
-$clrSub    = [System.Drawing.Color]::FromArgb(160, 160, 160)
-$clrOptDim = [System.Drawing.Color]::FromArgb(150, 150, 150)
-$clrOptHi  = [System.Drawing.Color]::FromArgb(130, 255, 130)
-$clrHint   = [System.Drawing.Color]::FromArgb(90, 90, 90)
-
-function New-DragLabel {
-    param($text, $font, $color, $x, $y, $w, $h, $align)
-    $lbl = New-Object System.Windows.Forms.Label
-    $lbl.Text      = $text
-    $lbl.Font      = $font
-    $lbl.ForeColor = $color
-    $lbl.AutoSize  = $false
-    $lbl.Size      = New-Object System.Drawing.Size($w, $h)
-    $lbl.Location  = New-Object System.Drawing.Point($x, $y)
-    $lbl.TextAlign = $align
-    $lbl.BackColor = [System.Drawing.Color]::Transparent
-    $lbl.Add_MouseDown($dragDown)
-    $lbl.Add_MouseMove($dragMove)
-    $lbl.Add_MouseUp($dragUp)
-    $panel.Controls.Add($lbl)
-    return $lbl
+    $panel.Controls.Add($pnl)
+    return $pnl
 }
 
-New-DragLabel "G O A T X" $fontTitle $clrTitle 5 10 432 42 "MiddleCenter" | Out-Null
-New-DragLabel "G O A T X" $fontTitle $clrTitle 5 52 432 42 "MiddleCenter" | Out-Null
-New-DragLabel "[+] CMD GOATX BY CUSTARD [+]" $fontSub $clrSub 5 98 432 20 "MiddleCenter" | Out-Null
+# ============================================================
+# Title (gradient paint panel)
+# ============================================================
+New-GradientLabel -text "G O A T X" -fontSize 22 `
+    -style ([System.Drawing.FontStyle]::Bold) `
+    -colors $script:GradBright -positions $script:GradPos `
+    -x 10 -y 20 -w 430 -h 42 | Out-Null
 
-$optStartY  = 132
-$optSpacing = 34
+# ============================================================
+# Subtitle (gradient paint panel)
+# ============================================================
+New-GradientLabel -text "[+] CMD GOATX BY CUSTARD [+]" -fontSize 10 `
+    -style ([System.Drawing.FontStyle]::Regular) `
+    -colors $script:GradMid -positions $script:GradPos `
+    -x 10 -y 66 -w 430 -h 22 | Out-Null
+
+# ============================================================
+# Options — ใช้ Label ปกติ (เสถียร) แล้ว set ForeColor
+# เป็นสี solid จาก palette เดียวกับ gradient
+# ============================================================
+
+# สี solid ที่ match gradient
+$clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)   # ม่วง-ฟ้าสว่าง (selected)
+$clrOptDim = [System.Drawing.Color]::FromArgb(90, 75, 110)     # ม่วงมืด (unselected)
+
+$fontOpt = New-Object System.Drawing.Font("Consolas", 12)
+
+$optStartY  = 104
+$optSpacing = 32
 
 for ($i = 0; $i -lt $script:optionCount; $i++) {
     $lbl = New-Object System.Windows.Forms.Label
-    $lbl.Text      = "  " + $script:options[$i].Label
+    $lbl.Text      = if ($i -eq 0) { "> " + $script:options[$i].Label } else { "  " + $script:options[$i].Label }
     $lbl.Font      = $fontOpt
-    $lbl.ForeColor = $clrOptDim
+    $lbl.ForeColor = if ($i -eq 0) { $clrOptHi } else { $clrOptDim }
     $lbl.AutoSize  = $false
-    $lbl.Size      = New-Object System.Drawing.Size(432, 30)
-    $lbl.Location  = New-Object System.Drawing.Point(5, ($optStartY + $i * $optSpacing))
-    $lbl.TextAlign = "MiddleCenter"
+    $lbl.Size      = New-Object System.Drawing.Size(430, 28)
+    $lbl.Location  = New-Object System.Drawing.Point(10, ($optStartY + $i * $optSpacing))
+    $lbl.TextAlign = "MiddleLeft"
     $lbl.BackColor = [System.Drawing.Color]::Transparent
     $lbl.Cursor    = [System.Windows.Forms.Cursors]::Hand
     $lbl.Tag       = $i
@@ -594,10 +508,32 @@ for ($i = 0; $i -lt $script:optionCount; $i++) {
     $script:labelControls += $lbl
 }
 
-New-DragLabel "Scroll to navigate, Enter to select" $fontHint $clrHint 5 212 432 16 "MiddleCenter" | Out-Null
+# Hint
+$fontHint = New-Object System.Drawing.Font("Consolas", 8)
+$hintLbl = New-Object System.Windows.Forms.Label
+$hintLbl.Text      = "Arrow keys to navigate, Enter to select"
+$hintLbl.Font      = $fontHint
+$hintLbl.ForeColor = $clrHint
+$hintLbl.AutoSize  = $false
+$hintLbl.Size      = New-Object System.Drawing.Size(430, 16)
+$hintLbl.Location  = New-Object System.Drawing.Point(10, 180)
+$hintLbl.TextAlign = "MiddleCenter"
+$hintLbl.BackColor = [System.Drawing.Color]::Transparent
+$panel.Controls.Add($hintLbl)
+
+# --- AcceptButton (hidden) ---
+$hiddenAcceptBtn = New-Object System.Windows.Forms.Button
+$hiddenAcceptBtn.Size     = New-Object System.Drawing.Size(1, 1)
+$hiddenAcceptBtn.Location = New-Object System.Drawing.Point(-100, -100)
+$hiddenAcceptBtn.TabStop  = $false
+$panel.Controls.Add($hiddenAcceptBtn)
+$form.AcceptButton = $hiddenAcceptBtn
+$hiddenAcceptBtn.Add_Click({
+    if (-not $script:isRunning) { Execute-Selection }
+})
 
 # ============================================================
-# --- 14. Highlight ---
+# --- 5. Highlight ---
 # ============================================================
 
 function Update-Highlight {
@@ -613,7 +549,7 @@ function Update-Highlight {
 }
 
 # ============================================================
-# --- 15. Execute ---
+# --- 6. Execute ---
 # ============================================================
 
 function Execute-Selection {
@@ -644,10 +580,10 @@ function Execute-Selection {
 }
 
 # ============================================================
-# --- 16. Keyboard ---
+# --- 7. Keyboard ---
 # ============================================================
 
-$form.Add_KeyDown({
+$script:KeyHandler = {
     param($s, $e)
     if ($e.KeyCode -eq 'Escape') { $form.Close(); return }
     if ($script:isRunning) { return }
@@ -660,14 +596,18 @@ $form.Add_KeyDown({
             $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount
             Update-Highlight; $e.Handled = $true
         }
-        'Enter' {
-            Execute-Selection; $e.Handled = $true
+        'Return' {
+            $e.Handled = $true; $e.SuppressKeyPress = $true
+            Execute-Selection
         }
     }
-})
+}
+
+$form.Add_KeyDown($script:KeyHandler)
+$panel.Add_KeyDown($script:KeyHandler)
 
 # ============================================================
-# --- 17. Scroll wheel ---
+# --- 8. Scroll wheel ---
 # ============================================================
 
 $scrollHandler = {
@@ -687,10 +627,11 @@ foreach ($ctrl in $panel.Controls) {
     try { $ctrl.Add_MouseWheel($scrollHandler) } catch {}
 }
 
-# ============================================================
-# --- 18. Init & Run ---
-# ============================================================
-
 $form.Add_Shown({ $panel.Focus() })
 Update-Highlight
+
+# ============================================================
+# --- 9. Run ---
+# ============================================================
+
 [System.Windows.Forms.Application]::Run($form)
