@@ -1,0 +1,350 @@
+<html>
+<head>
+<title>GOATX</title>
+<HTA:APPLICATION
+  ID="GOATX"
+  APPLICATIONNAME="GOATX"
+  BORDER="thin"
+  BORDERSTYLE="normal"
+  CAPTION="yes"
+  ICON=""
+  MAXIMIZEBUTTON="no"
+  MINIMIZEBUTTON="yes"
+  SHOWINTASKBAR="yes"
+  SINGLEINSTANCE="yes"
+  SYSMENU="yes"
+  VERSION="1.0"
+  WINDOWSTATE="normal"
+  SCROLL="no"
+/>
+<meta charset="UTF-8" />
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.term-wrap {
+  background: #1a1a1a;
+  border: 2px solid #444;
+  color: #c8c8c8;
+  width: 500px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  user-select: none;
+  margin: 40px auto;
+}
+
+.term-title {
+  background: #2a2a2a;
+  border-bottom: 1px solid #444;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #888;
+}
+
+.term-body { padding: 18px 22px 22px; min-height: 280px; }
+
+.logo-line {
+  font-size: 26px;
+  font-weight: bold;
+  color: #b8d4e8;
+  letter-spacing: 6px;
+  text-align: center;
+  margin-bottom: 2px;
+}
+
+.sub-line { font-size: 11px; color: #5a9fc0; text-align: center; margin-bottom: 2px; }
+.divider  { color: #555; text-align: center; font-size: 11px; margin-bottom: 14px; }
+
+.section-label { color: #5a9fc0; font-size: 13px; margin-bottom: 10px; }
+.prompt        { color: #5a9fc0; font-size: 13px; }
+
+.key-input-wrap { display: flex; align-items: center; margin-top: 2px; }
+
+.license-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #c8c8c8;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  width: 220px;
+}
+
+.cursor { color: #7fd47f; }
+
+.error-msg   { color: #e05555; font-size: 13px; margin-top: 8px; }
+.success-line{ color: #7fd47f; font-size: 13px; }
+.info-line   { color: #c8c8c8; font-size: 13px; margin-top: 4px; }
+
+.menu-item {
+  padding: 4px 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #c8c8c8;
+  font-family: 'Courier New', Courier, monospace;
+}
+.menu-item:hover { background: #2c2c2c; }
+.menu-item.danger { color: #e05555; }
+.menu-selected { color: #fff; }
+
+.hint { font-size: 11px; color: #555; margin-top: 14px; }
+
+.level-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  font-size: 11px;
+  margin-left: 6px;
+  background: #1a4a1a;
+  color: #7fd47f;
+  border: 1px solid #3a7a3a;
+}
+
+.back-link {
+  font-size: 11px; color: #555; cursor: pointer; margin-top: 14px;
+  font-family: 'Courier New', Courier, monospace;
+  background: none; border: none; padding: 0; display: block;
+  text-decoration: none;
+}
+.back-link:hover { color: #888; }
+
+.run-log {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #7fd47f;
+  line-height: 1.6;
+}
+</style>
+</head>
+<body>
+
+<div class="term-wrap">
+  <div class="term-title">-=: GOATX :=- &nbsp;&nbsp; [CMD GOATX BY CUSTARD]</div>
+
+  <div class="term-body">
+    <div class="logo-line">G O A T X</div>
+    <div class="sub-line">[+] CMD GOATX BY CUSTARD [+]</div>
+    <div class="divider">[---------------------------------]</div>
+
+    <!-- SCREEN 1: LICENSE INPUT -->
+    <div id="screen-license">
+      <div class="section-label">[LICENSE]</div>
+      <div class="key-input-wrap">
+        <span class="prompt">&gt; Enter license key:&nbsp;</span>
+        <input class="license-input" id="license-input" type="text" maxlength="32" />
+        <span class="cursor">_</span>
+      </div>
+      <div id="license-result"></div>
+      <div class="hint">Press Enter to validate</div>
+    </div>
+
+    <!-- SCREEN 1b: CHECKING -->
+    <div id="screen-checking" style="display:none">
+      <div class="section-label">[LICENSE]</div>
+      <div class="success-line">[*] Validating key...</div>
+    </div>
+
+    <!-- SCREEN 1c: SUCCESS FLASH -->
+    <div id="screen-success" style="display:none">
+      <div class="section-label">[LICENSE]</div>
+      <div class="key-input-wrap">
+        <span class="prompt">&gt; Enter license key:&nbsp;</span>
+        <span id="success-key-echo" style="color:#c8c8c8; font-size:13px"></span>
+      </div>
+      <div class="success-line" style="margin-top:8px">[+] Key verified successfully</div>
+    </div>
+
+    <!-- SCREEN 2: MENU -->
+    <div id="screen-menu" style="display:none">
+      <div class="section-label">[MENU]</div>
+      <div id="menu-1" class="menu-item" onclick="selectMenu(1)">[1] High — Apply GOAT Tweaks</div>
+      <div style="margin-top:6px">
+        <div id="menu-2" class="menu-item danger" onclick="selectMenu(2)">[2] Reset — Back to License</div>
+      </div>
+      <div class="hint">Click or press 1 / 2 to select</div>
+    </div>
+
+    <!-- SCREEN 3: RUNNING -->
+    <div id="screen-running" style="display:none">
+      <div class="section-label">[RUNNING]</div>
+      <div class="success-line">[+] Mode: <span class="level-badge">HIGH</span></div>
+      <div class="run-log" id="run-log">
+        [*] Launching GOAT Tweaks as Administrator...<br>
+        [*] Please wait — a PowerShell window will open.<br>
+      </div>
+      <a class="back-link" onclick="resetAll()">&larr; [R] Reset / Back to menu</a>
+    </div>
+
+  </div>
+</div>
+
+<script language="VBScript">
+' ============================================================
+' VBScript helpers — run PowerShell, auto-elevate UAC
+' ============================================================
+
+Sub RunTweaks()
+  Dim shell, ps1Path, cmd
+  Set shell = CreateObject("WScript.Shell")
+
+  ' ── ปรับ URL ให้ตรงกับ raw GitHub ของคุณ ──────────────────
+  Dim ps1Url
+  ps1Url = "https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/Tweak.ps1"
+  ' ──────────────────────────────────────────────────────────
+
+  ps1Path = shell.ExpandEnvironmentStrings("%TEMP%") & "\GOATX_Tweak.ps1"
+
+  ' Download Tweak.ps1 จาก GitHub
+  Dim http
+  Set http = CreateObject("MSXML2.XMLHTTP")
+  http.Open "GET", ps1Url, False
+  http.Send
+
+  If http.Status <> 200 Then
+    MsgBox "[-] Failed to download Tweak.ps1 from GitHub." & Chr(10) & "Status: " & http.Status, 16, "GOATX Error"
+    Call ShowMenu()
+    Exit Sub
+  End If
+
+  ' เขียนไฟล์ลง %TEMP%
+  Dim fso, f
+  Set fso = CreateObject("Scripting.FileSystemObject")
+  Set f   = fso.CreateTextFile(ps1Path, True, False)
+  f.Write http.responseText
+  f.Close
+
+  ' รัน PowerShell as Admin (UAC prompt)
+  cmd = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File """ & ps1Path & """"
+  shell.ShellExecute "powershell.exe", _
+    "-NoProfile -ExecutionPolicy Bypass -File """ & ps1Path & """", _
+    "", "runas", 1
+
+  Set shell = Nothing
+End Sub
+
+Sub CheckKeyVBS(key)
+  ' ── ปรับ Spreadsheet ID และ Sheet name ──────────────────────
+  Dim sheetId, sheetName, apiKey
+  sheetId   = "YOUR_SPREADSHEET_ID"
+  sheetName = "Keys"
+  apiKey    = "YOUR_GOOGLE_API_KEY"
+  ' ────────────────────────────────────────────────────────────
+
+  Dim url
+  url = "https://sheets.googleapis.com/v4/spreadsheets/" & sheetId & _
+        "/values/" & sheetName & "!A:A?key=" & apiKey
+
+  Dim http
+  Set http = CreateObject("MSXML2.XMLHTTP")
+  On Error Resume Next
+  http.Open "GET", url, False
+  http.Send
+
+  If Err.Number <> 0 Or http.Status <> 200 Then
+    ' ถ้าเชื่อมต่อ Google ไม่ได้ — แจ้งและกลับหน้า license
+    window.execScript "showKeyError('[-] Cannot reach Google Sheets. Check internet / API key.')", "JScript"
+    Exit Sub
+  End If
+  On Error GoTo 0
+
+  Dim resp
+  resp = http.responseText
+
+  ' ค้นหา key ใน JSON response (simple string search)
+  If InStr(resp, """" & key & """") > 0 Then
+    window.execScript "onKeyValid('" & key & "')", "JScript"
+  Else
+    window.execScript "showKeyError('[-] Invalid or expired license key.')", "JScript"
+  End If
+End Sub
+</script>
+
+<script language="JScript">
+// ============================================================
+// JScript — UI logic
+// ============================================================
+
+window.onload = function() {
+  resizeTo(540, 420);
+  document.getElementById('license-input').focus();
+
+  document.getElementById('license-input').onkeydown = function(e) {
+    var k = e.keyCode || e.which;
+    if (k === 13) submitKey();
+  };
+};
+
+function showScreen(id) {
+  var ids = ['screen-license','screen-checking','screen-success','screen-menu','screen-running'];
+  for (var i = 0; i < ids.length; i++) {
+    document.getElementById(ids[i]).style.display = 'none';
+  }
+  document.getElementById(id).style.display = 'block';
+}
+
+function submitKey() {
+  var key = document.getElementById('license-input').value.replace(/^\s+|\s+$/g,'').toUpperCase();
+  if (!key) {
+    document.getElementById('license-result').innerHTML = '<div class="error-msg">[-] Please enter a license key.</div>';
+    return;
+  }
+  document.getElementById('license-result').innerHTML = '';
+  showScreen('screen-checking');
+
+  // Call VBScript to check key against Google Sheets
+  window.setTimeout(function() {
+    CheckKeyVBS(key);
+  }, 100);
+}
+
+function showKeyError(msg) {
+  showScreen('screen-license');
+  document.getElementById('license-result').innerHTML = '<div class="error-msg">' + msg + '</div>';
+  document.getElementById('license-input').focus();
+}
+
+function onKeyValid(key) {
+  document.getElementById('success-key-echo').innerText = key;
+  showScreen('screen-success');
+  window.setTimeout(function() {
+    showScreen('screen-menu');
+    document.getElementById('menu-1').focus();
+  }, 1200);
+}
+
+function selectMenu(val) {
+  if (val === 2) { resetAll(); return; }
+  // val === 1 → High
+  showScreen('screen-running');
+  window.setTimeout(function() {
+    RunTweaks();
+  }, 300);
+}
+
+function resetAll() {
+  document.getElementById('license-input').value = '';
+  document.getElementById('license-result').innerHTML = '';
+  showScreen('screen-license');
+  document.getElementById('license-input').focus();
+}
+
+function ShowMenu() {
+  showScreen('screen-menu');
+}
+
+// Keyboard shortcuts on menu screen
+document.onkeydown = function(e) {
+  if (document.getElementById('screen-menu').style.display === 'none') return;
+  var k = e.keyCode || e.which;
+  if (k === 49) selectMenu(1); // key "1"
+  if (k === 50) selectMenu(2); // key "2"
+};
+</script>
+</body>
+</html>
