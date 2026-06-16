@@ -381,7 +381,7 @@ $form.MaximizeBox     = $false
 $form.BackColor       = $clrBg
 $form.TopMost         = $true
 $form.KeyPreview      = $true
-$form.Opacity         = 0.85
+$form.Opacity         = 1
 $form.ClientSize      = New-Object System.Drawing.Size(450, 235)
 
 # Panel
