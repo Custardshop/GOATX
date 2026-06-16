@@ -360,7 +360,7 @@ $script:GradMid = @(
     [System.Drawing.Color]::FromArgb(160, 130, 220),
     [System.Drawing.Color]::FromArgb(220, 140, 190)
 )
-# สีมืด (unselected option) — ต้องสว่างพอให้เห็นชัดที่ opacity 0.65
+# สีมืด (unselected option) — ต้องสว่างพอให้เห็นชัดที่ opacity 0.85
 $script:GradDim = @(
     [System.Drawing.Color]::FromArgb(60, 110, 140),
     [System.Drawing.Color]::FromArgb(110, 70, 140),
