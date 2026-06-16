@@ -360,7 +360,7 @@ $script:GradMid = @(
     [System.Drawing.Color]::FromArgb(160, 130, 220),
     [System.Drawing.Color]::FromArgb(220, 140, 190)
 )
-# สีมืด (unselected option) — ต้องสว่างพอให้เห็นชัดที่ opacity 0.85
+# สีมืด (unselected option) — ต้องสว่างพอให้เห็นชัดที่ opacity 0.75
 $script:GradDim = @(
     [System.Drawing.Color]::FromArgb(60, 110, 140),
     [System.Drawing.Color]::FromArgb(110, 70, 140),
@@ -381,7 +381,7 @@ $form.MaximizeBox     = $false
 $form.BackColor       = $clrBg
 $form.TopMost         = $true
 $form.KeyPreview      = $true
-$form.Opacity         = 0.65
+$form.Opacity         = 0.85
 $form.ClientSize      = New-Object System.Drawing.Size(450, 235)
 
 # Panel
