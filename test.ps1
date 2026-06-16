@@ -1,0 +1,716 @@
+<#
+============================================================
+  GOATX - Windows Performance Tweaks GUI
+  Terminal overlay + animated neon rainbow gradient border
+============================================================
+#>
+
+# --- 1. Admin check ---
+$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "powershell.exe"
+    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`""
+    $psi.Verb = "runas"
+    $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+    try { [System.Diagnostics.Process]::Start($psi) | Out-Null } catch {}
+    exit
+}
+
+# --- 2. Hide console ---
+Add-Type -Name Win32ShowWindow -Namespace Native -MemberDefinition @"
+[DllImport("user32.dll")]
+public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+[DllImport("kernel32.dll")]
+public static extern IntPtr GetConsoleWindow();
+"@
+$consoleHandle = [Native.Win32ShowWindow]::GetConsoleWindow()
+if ($consoleHandle -ne [IntPtr]::Zero) {
+    [Native.Win32ShowWindow]::ShowWindow($consoleHandle, 0) | Out-Null
+}
+
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# --- 3. Double-buffered form ---
+Add-Type @"
+using System.Windows.Forms;
+public class GoatxForm : Form {
+    public GoatxForm() {
+        this.SetStyle(
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.AllPaintingInWmPaint, true);
+    }
+}
+"@
+
+# ============================================================
+# --- 4. Tweak scriptblocks ---
+# ============================================================
+
+$Tweak_KernelHPET = {
+    bcdedit /set useplatformclock no | Out-Null
+    bcdedit /set useplatformtick yes | Out-Null
+    bcdedit /set disabledynamictick yes | Out-Null
+    bcdedit /set tscsyncpolicy Enhanced | Out-Null
+    bcdedit /set nx OptOut | Out-Null
+    bcdedit /set synthetictimers yes | Out-Null
+    bcdedit /set nospeculationcontrol 1 | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v DisablePagingExecutive /t REG_DWORD /d 1 /f | Out-Null
+}
+
+$Tweak_TimerResolution = {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v GlobalTimerResolutionRequests /t REG_DWORD /d 1 /f | Out-Null
+}
+
+$Tweak_ProcessPriority = {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32PrioritySeparation /t REG_DWORD /d 42 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control" /v SvcHostSplitThresholdInKB /t REG_DWORD /d 33554432 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v SystemResponsiveness /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Executive" /v AdditionalCriticalWorkerThreads /t REG_DWORD /d 2 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v Priority /t REG_DWORD /d 6 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Background Only" /t REG_SZ /d False /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\501a4d13-42af-4429-9fd1-a8218c268e20\ee12f2c1-98bb-455b-9e09-ae4c1e16cb45" /v Attributes /t REG_DWORD /d 2 /f | Out-Null
+}
+
+$Tweak_IrqMsiMode = {
+    Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI' -ErrorAction SilentlyContinue | ForEach-Object {
+        $p = ($_.PSPath + '\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties')
+        if (Test-Path $p) { Set-ItemProperty -Path $p -Name MSISupported -Value 1 -Type DWord -Force }
+    }
+}
+
+$Tweak_MemoryManagement = {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v SystemCacheDirtyPageThreshold /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v ClearPageFileAtShutdown /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v LargeSystemCache /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnablePrefetcher /t REG_DWORD /d 3 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
+    powercfg -h off | Out-Null
+    taskkill /f /im OneDrive.exe 2>$null | Out-Null
+    reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v OneDrive /f 2>$null | Out-Null
+}
+
+$Tweak_Storage = {
+    fsutil behavior set disable8dot3 1 | Out-Null
+    fsutil behavior set disablelastaccess 1 | Out-Null
+    fsutil behavior set disabledeletenotify 0 | Out-Null
+    Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter } | ForEach-Object {
+        Optimize-Volume -DriveLetter $_.DriveLetter -ReTrim -ErrorAction SilentlyContinue
+    }
+}
+
+$Tweak_InputUSB = {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\mouclass\Parameters" /v MouseDataQueueSize /t REG_DWORD /d 16 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\kbdclass\Parameters" /v KeyboardDataQueueSize /t REG_DWORD /d 16 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling" /v PowerThrottlingOff /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKCU\Control Panel\Mouse" /v MouseSpeed /t REG_SZ /d 0 /f | Out-Null
+    reg add "HKCU\Control Panel\Mouse" /v MouseThreshold1 /t REG_SZ /d 0 /f | Out-Null
+    reg add "HKCU\Control Panel\Mouse" /v MouseThreshold2 /t REG_SZ /d 0 /f | Out-Null
+    reg add "HKCU\Control Panel\Keyboard" /v KeyboardDelay /t REG_SZ /d 0 /f | Out-Null
+    reg add "HKCU\Control Panel\Keyboard" /v KeyboardSpeed /t REG_SZ /d 31 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\USB" /v DisableSelectiveSuspend /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\HidUsb" /v IdleEnable /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Control Panel\Mouse" /v MouseHoverTime /t REG_SZ /d 0 /f | Out-Null
+    reg add "HKCU\Control Panel\Accessibility\StickyKeys" /v Flags /t REG_SZ /d 506 /f | Out-Null
+    reg add "HKCU\Control Panel\Accessibility\ToggleKeys" /v Flags /t REG_SZ /d 58 /f | Out-Null
+    reg add "HKCU\Control Panel\Accessibility\MouseKeys" /v Flags /t REG_SZ /d 0 /f | Out-Null
+}
+
+$Tweak_Nagle = {
+    Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces' -ErrorAction SilentlyContinue | ForEach-Object {
+        Set-ItemProperty -Path $_.PSPath -Name TcpAckFrequency -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $_.PSPath -Name TCPNoDelay -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $_.PSPath -Name TcpDelAckTicks -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+    }
+}
+
+$Tweak_VisualEffects = {
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f | Out-Null
+    reg add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f | Out-Null
+    reg add "HKCU\Control Panel\Desktop\WindowMetrics" /v MinAnimate /t REG_SZ /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarAnimations /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 0 /f | Out-Null
+    reg add "HKCU\Control Panel\Desktop" /v DragFullWindows /t REG_SZ /d 0 /f | Out-Null
+}
+
+$Tweak_GameBarDVR = {
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR" /v AppCaptureEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\System\GameConfigStore" /v GameDVR_Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\System\GameConfigStore" /v GameDVR_FSEBehaviorMode /t REG_DWORD /d 2 /f | Out-Null
+    reg add "HKCU\System\GameConfigStore" /v GameDVR_HonorUserFSEBehaviorMode /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKCU\System\GameConfigStore" /v GameDVR_DXGIHonorFSEWindowsCompatible /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR" /v AllowGameDVR /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer" /v EnableXamlStartMenu /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\GameBar" /v AllowAutoGameMode /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\GameBar" /v AutoGameModeEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\GameBar" /v GamePanelStartupTipIndex /t REG_DWORD /d 3 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\DirectX\GraphicsSettings" /v HwSchMode /t REG_DWORD /d 2 /f | Out-Null
+}
+
+$Tweak_ProcessorPower = {
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 100 | Out-Null
+    powercfg /setactive SCHEME_CURRENT | Out-Null
+    powercfg /hibernate off | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d 0 /f | Out-Null
+}
+
+$Tweak_CoreParking = {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\0cc5b647-c1df-4637-891a-dec35c318583" /v ValueMin /t REG_DWORD /d 0 /f | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMINCORES 100 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMAXCORES 100 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR HETEROCLASS1INITIALPERF 100 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR HETEROCLASS0FLOORPERF 100 | Out-Null
+    powercfg /setactive SCHEME_CURRENT | Out-Null
+}
+
+$Tweak_GpuDisplay = {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 2 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrLevel /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrDelay /t REG_DWORD /d 60 /f | Out-Null
+}
+
+$Tweak_AudioLatency = {
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "Background Only" /t REG_SZ /d False /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "GPU Priority" /t REG_DWORD /d 8 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v Priority /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
+}
+
+$Tweak_NetworkDNS = {
+    netsh int tcp set global rss=enabled | Out-Null
+    netsh int tcp set global autotuninglevel=normal | Out-Null
+    netsh int tcp set global timestamps=disabled | Out-Null
+    netsh int tcp set global chimney=disabled | Out-Null
+    netsh int tcp set global rsc=disabled | Out-Null
+    netsh int tcp set heuristics disabled | Out-Null
+    netsh int tcp set global ecncapability=enabled | Out-Null
+    netsh int tcp set global fastopen=enabled | Out-Null
+    netsh int udp set global uro=disabled | Out-Null
+    netsh int tcp set supplemental template=custom congestionprovider=cubic | Out-Null
+    netsh int tcp set supplemental template=custom icw=10 | Out-Null
+    netsh int tcp set supplemental template=custom initialrto=750 | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v NonBestEffortLimit /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TCPNoDelay /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpAckFrequency /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v DefaultTTL /t REG_DWORD /d 64 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v DisabledComponents /t REG_DWORD /d 255 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnablePMTUDiscovery /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnableRSS /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnableTCPChimney /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v Tcp1323Opts /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v FastSendDatagramThreshold /t REG_DWORD /d 65536 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DefaultReceiveWindow /t REG_DWORD /d 16384 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DefaultSendWindow /t REG_DWORD /d 16384 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v FastCopyReceiveThreshold /t REG_DWORD /d 1536 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\QoS" /v "Do not use NLA" /t REG_SZ /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v EnableMulticast /t REG_DWORD /d 0 /f | Out-Null
+    Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\services\NetBT\Parameters\Interfaces' -ErrorAction SilentlyContinue | ForEach-Object {
+        Set-ItemProperty -Path $_.PSPath -Name NetbiosOptions -Value 2 -ErrorAction SilentlyContinue
+    }
+    Get-NetAdapter -Physical | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
+        Disable-NetAdapterLso -Name $_.Name -ErrorAction SilentlyContinue
+        Set-NetAdapterAdvancedProperty -Name $_.Name -RegistryKeyword '*InterruptModeration' -RegistryValue 0 -ErrorAction SilentlyContinue
+    }
+    Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.Physical } | ForEach-Object {
+        Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses ('1.1.1.1','8.8.8.8') -ErrorAction SilentlyContinue
+        Disable-NetAdapterPowerManagement -Name $_.Name -ErrorAction SilentlyContinue
+    }
+    ipconfig /flushdns | Out-Null
+    netsh winsock reset | Out-Null
+    netsh int ip reset | Out-Null
+}
+
+$Tweak_PrivacyTelemetry = {
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v Disabled /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Error Reporting" /v Disabled /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableActivityFeed /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v PublishUserActivities /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v UploadUserActivities /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v NoAutoRebootWithLoggedOnUsers /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v AUPowerManagement /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Start_TrackProgs /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" /v DisableLocation /t REG_DWORD /d 1 /f | Out-Null
+}
+
+$Tweak_Services = {
+    $disableList = @('DiagTrack','WSearch','MapsBroker','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','Fax','RetailDemo','RemoteRegistry','WerSvc')
+    foreach ($s in $disableList) {
+        sc.exe stop $s 2>$null | Out-Null
+        sc.exe config $s start= disabled 2>$null | Out-Null
+    }
+    $autoList = @('Audiosrv','AudioEndpointBuilder','Dhcp','NlaSvc','Netman','WlanSvc','RpcSs','EventLog','PlugPlay','LanmanWorkstation','LanmanServer')
+    foreach ($s in $autoList) {
+        sc.exe config $s start= auto 2>$null | Out-Null
+        sc.exe start $s 2>$null | Out-Null
+    }
+}
+
+$Tweak_JunkCleanup = {
+    Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$env:WINDIR\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$env:WINDIR\Prefetch\*" -Recurse -Force -ErrorAction SilentlyContinue
+    Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
+    Stop-Service UsoSvc -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$env:WINDIR\SoftwareDistribution" -Recurse -Force -ErrorAction SilentlyContinue
+    Start-Service wuauserv -ErrorAction SilentlyContinue
+    Get-WinEvent -ListLog * -ErrorAction SilentlyContinue | ForEach-Object {
+        try { wevtutil.exe cl $_.LogName } catch {}
+    }
+    Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+}
+
+$Tweak_IniCompat = {
+    $systemIni = Join-Path $env:windir 'system.ini'
+    $winIni = Join-Path $env:windir 'win.ini'
+    $ini = @"
+; for 16-bit app support
+[386Enh]
+MinTimeSlice=1
+AvgTimeSlice=1
+MaxTimeSlice=1
+WinTimeSlice=1,1
+NetAsyncTimeout=0
+SyncTimeDivisor=1
+TimeWindowMinutes=0
+Latency=1
+SampleRate=1
+UseHWTimeStamp=1
+Auto-Detect-CPU=TRUE
+CpuSnooze=0
+MaxBiosPipes=128
+MinBiosPipes=128
+DoubleBuffer=0
+Chunksize=5000000
+LoadTop=0
+SystemReg=0
+FastBlt=1
+
+[drivers]
+wave=mmdrv.dll
+timer=timer.drv
+
+[mci]
+mciwave=mmsystem.dll
+
+[timer]
+TimeSliceUpdateTickCount=1
+
+[NonWindowsApp]
+MouseExclusive=1
+"@
+    Copy-Item $systemIni "$systemIni.backup" -Force -ErrorAction SilentlyContinue
+    Copy-Item $winIni "$winIni.backup" -Force -ErrorAction SilentlyContinue
+    Add-Content $systemIni "`r`n$ini"
+    Add-Content $winIni "`r`n$ini"
+}
+
+# --- 5. Tweak registry ---
+$AllTweaks = [ordered]@{
+    "[01] Kernel and HPET"             = $Tweak_KernelHPET
+    "[02] Timer Resolution"            = $Tweak_TimerResolution
+    "[03] Process Priority"            = $Tweak_ProcessPriority
+    "[04] IRQ MSI Mode"                = $Tweak_IrqMsiMode
+    "[05] Memory Management"          = $Tweak_MemoryManagement
+    "[06] Storage Optimizations"       = $Tweak_Storage
+    "[07] Input and USB"               = $Tweak_InputUSB
+    "[08] Nagle Algorithm"             = $Tweak_Nagle
+    "[09] Visual Effects"              = $Tweak_VisualEffects
+    "[10] Game Bar and DVR"            = $Tweak_GameBarDVR
+    "[11] Processor Power"             = $Tweak_ProcessorPower
+    "[12] CPU Core Parking"            = $Tweak_CoreParking
+    "[13] GPU and Display"             = $Tweak_GpuDisplay
+    "[14] Audio Latency"               = $Tweak_AudioLatency
+    "[15] Network and DNS"             = $Tweak_NetworkDNS
+    "[16] Privacy and Telemetry"       = $Tweak_PrivacyTelemetry
+    "[17] Windows Services"            = $Tweak_Services
+    "[18] Junk and Log Cleanup"        = $Tweak_JunkCleanup
+    "[20] System.ini / Win.ini Compat" = $Tweak_IniCompat
+}
+
+# ============================================================
+# --- 6. GUI State ---
+# ============================================================
+
+$script:selectedIndex = 0
+$script:isRunning     = $false
+$script:optionCount   = 2
+$script:labelControls = @()
+$script:borderOffset  = 0.0
+$script:breathPhase   = 0.0
+$script:options = @(
+    @{ Label = "[1] High"; Action = "high" }
+    @{ Label = "[2] Exit"; Action = "exit" }
+)
+
+# ============================================================
+# --- 7. Create Form ---
+# ============================================================
+
+$form = New-Object GoatxForm
+$form.Text            = "GOATX"
+$form.Size            = New-Object System.Drawing.Size(460, 280)
+$form.StartPosition   = "CenterScreen"
+$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+$form.BackColor       = [System.Drawing.Color]::Black
+$form.Opacity         = 0.80
+$form.TopMost         = $true
+$form.KeyPreview      = $true
+
+# Center panel (content sits here, leaving room for border glow)
+$borderPad = 8
+$panel = New-Object System.Windows.Forms.Panel
+$panel.Location  = New-Object System.Drawing.Point($borderPad, $borderPad)
+$panel.Size      = New-Object System.Drawing.Size(($form.ClientSize.Width - $borderPad * 2), ($form.ClientSize.Height - $borderPad * 2))
+$panel.BackColor = [System.Drawing.Color]::FromArgb(17, 17, 17)
+$panel.TabStop   = $true
+$form.Controls.Add($panel)
+
+# ============================================================
+# --- 8. Animated Border Paint (on form, around panel) ---
+# ============================================================
+
+$form.Add_Paint({
+    param($s, $e)
+    $g = $e.Graphics
+    $g.SmoothingMode = 'AntiAlias'
+
+    $w = $s.ClientSize.Width
+    $h = $s.ClientSize.Height
+
+    # Breathing alpha (pulse 80-255)
+    $breathAlpha = [math]::Round(80 + 175 * (0.5 + 0.5 * [math]::Sin($script:breathPhase)))
+
+    # Draw multiple glow layers (outer glow)
+    $glowLayers = 4
+    for ($layer = $glowLayers; $layer -ge 1; $layer--) {
+        $inset  = $layer * 2
+        $alpha  = [math]::Round($breathAlpha * (0.15 / $layer))
+
+        # Gradient along perimeter using hue rotation
+        # Top edge
+        $steps = 60
+        for ($i = 0; $i -lt $steps; $i++) {
+            $frac = $i / $steps
+            $hue = ($script:borderOffset + $frac * 360) % 360
+            $c = HSL-ToRGB $hue 1.0 0.55
+            $color = [System.Drawing.Color]::FromArgb($alpha, $c[0], $c[1], $c[2])
+            $pen = New-Object System.Drawing.Pen($color, 2)
+
+            $x1 = [math]::Round($inset + ($w - 2 * $inset) * $frac)
+            $x2 = [math]::Round($inset + ($w - 2 * $inset) * (($i + 1) / $steps))
+            $g.DrawLine($pen, $x1, $inset, $x2, $inset)
+            $pen.Dispose()
+        }
+        # Right edge
+        for ($i = 0; $i -lt $steps; $i++) {
+            $frac = $i / $steps
+            $hue = ($script:borderOffset + 90 + $frac * 360) % 360
+            $c = HSL-ToRGB $hue 1.0 0.55
+            $color = [System.Drawing.Color]::FromArgb($alpha, $c[0], $c[1], $c[2])
+            $pen = New-Object System.Drawing.Pen($color, 2)
+            $y1 = [math]::Round($inset + ($h - 2 * $inset) * $frac)
+            $y2 = [math]::Round($inset + ($h - 2 * $inset) * (($i + 1) / $steps))
+            $g.DrawLine($pen, ($w - $inset), $y1, ($w - $inset), $y2)
+            $pen.Dispose()
+        }
+        # Bottom edge
+        for ($i = 0; $i -lt $steps; $i++) {
+            $frac = $i / $steps
+            $hue = ($script:borderOffset + 180 + $frac * 360) % 360
+            $c = HSL-ToRGB $hue 1.0 0.55
+            $color = [System.Drawing.Color]::FromArgb($alpha, $c[0], $c[1], $c[2])
+            $pen = New-Object System.Drawing.Pen($color, 2)
+            $x1 = [math]::Round(($w - $inset) - ($w - 2 * $inset) * $frac)
+            $x2 = [math]::Round(($w - $inset) - ($w - 2 * $inset) * (($i + 1) / $steps))
+            $g.DrawLine($pen, $x1, ($h - $inset), $x2, ($h - $inset))
+            $pen.Dispose()
+        }
+        # Left edge
+        for ($i = 0; $i -lt $steps; $i++) {
+            $frac = $i / $steps
+            $hue = ($script:borderOffset + 270 + $frac * 360) % 360
+            $c = HSL-ToRGB $hue 1.0 0.55
+            $color = [System.Drawing.Color]::FromArgb($alpha, $c[0], $c[1], $c[2])
+            $pen = New-Object System.Drawing.Pen($color, 2)
+            $y1 = [math]::Round(($h - $inset) - ($h - 2 * $inset) * $frac)
+            $y2 = [math]::Round(($h - $inset) - ($h - 2 * $inset) * (($i + 1) / $steps))
+            $g.DrawLine($pen, $inset, $y1, $inset, $y2)
+            $pen.Dispose()
+        }
+    }
+
+    # Inner sharp border (1px bright line)
+    $innerAlpha = [math]::Min(255, $breathAlpha + 60)
+    for ($i = 0; $i -lt 4; $i++) {
+        $frac = $i / 4
+        $hue = ($script:borderOffset + $frac * 360) % 360
+        $c = HSL-ToRGB $hue 1.0 0.7
+        $color = [System.Drawing.Color]::FromArgb($innerAlpha, $c[0], $c[1], $c[2])
+        $pen = New-Object System.Drawing.Pen($color, 1)
+
+        switch ($i) {
+            0 { $g.DrawLine($pen, $borderPad, $borderPad, ($w - $borderPad), $borderPad) }
+            1 { $g.DrawLine($pen, ($w - $borderPad), $borderPad, ($w - $borderPad), ($h - $borderPad)) }
+            2 { $g.DrawLine($pen, ($w - $borderPad), ($h - $borderPad), $borderPad, ($h - $borderPad)) }
+            3 { $g.DrawLine($pen, $borderPad, ($h - $borderPad), $borderPad, $borderPad) }
+        }
+        $pen.Dispose()
+    }
+})
+
+# ============================================================
+# --- 9. HSL to RGB helper ---
+# ============================================================
+
+function HSL-ToRGB {
+    param([double]$h, [double]$s, [double]$l)
+    $c = (1 - [math]::Abs(2 * $l - 1)) * $s
+    $x = $c * (1 - [math]::Abs((($h / 60) % 2) - 1))
+    $m = $l - $c / 2
+    $r = 0; $g = 0; $b = 0
+    if     ($h -lt 60)  { $r = $c; $g = $x; $b = 0 }
+    elseif ($h -lt 120) { $r = $x; $g = $c; $b = 0 }
+    elseif ($h -lt 180) { $r = 0; $g = $c; $b = $x }
+    elseif ($h -lt 240) { $r = 0; $g = $x; $b = $c }
+    elseif ($h -lt 300) { $r = $x; $g = 0; $b = $c }
+    else                { $r = $c; $g = 0; $b = $x }
+    return @(
+        [math]::Min(255, [math]::Round(($r + $m) * 255)),
+        [math]::Min(255, [math]::Round(($g + $m) * 255)),
+        [math]::Min(255, [math]::Round(($b + $m) * 255))
+    )
+}
+
+# ============================================================
+# --- 10. Animation Timer (~60 FPS) ---
+# ============================================================
+
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 16
+$timer.Add_Tick({
+    $script:borderOffset = ($script:borderOffset + 1.5) % 360
+    $script:breathPhase  += 0.03
+    $form.Invalidate()
+})
+$timer.Start()
+
+# ============================================================
+# --- 11. Drag support ---
+# ============================================================
+
+$script:dragging  = $false
+$script:dragStart = New-Object System.Drawing.Point(0, 0)
+
+$dragDown = {
+    param($s, $e)
+    if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+        $script:dragging  = $true
+        $script:dragStart = New-Object System.Drawing.Point($e.X, $e.Y)
+    }
+}
+$dragMove = {
+    param($s, $e)
+    if ($script:dragging) {
+        $form.Location = New-Object System.Drawing.Point(
+            ($form.Location.X + $e.X - $script:dragStart.X),
+            ($form.Location.Y + $e.Y - $script:dragStart.Y)
+        )
+    }
+}
+$dragUp = { $script:dragging = $false }
+
+$form.Add_MouseDown($dragDown)
+$form.Add_MouseMove($dragMove)
+$form.Add_MouseUp($dragUp)
+$panel.Add_MouseDown($dragDown)
+$panel.Add_MouseMove($dragMove)
+$panel.Add_MouseUp($dragUp)
+
+# ============================================================
+# --- 12. UI Labels ---
+# ============================================================
+
+# Fonts
+$fontTitle = New-Object System.Drawing.Font("Consolas", 22, [System.Drawing.FontStyle]::Bold)
+$fontSub   = New-Object System.Drawing.Font("Consolas", 9.5)
+$fontOpt   = New-Object System.Drawing.Font("Consolas", 12)
+$fontHint  = New-Object System.Drawing.Font("Consolas", 8)
+
+# Colors
+$clrTitle  = [System.Drawing.Color]::FromArgb(184, 220, 240)
+$clrSub    = [System.Drawing.Color]::FromArgb(160, 160, 160)
+$clrOptDim = [System.Drawing.Color]::FromArgb(150, 150, 150)
+$clrOptHi  = [System.Drawing.Color]::FromArgb(130, 255, 130)
+$clrHint   = [System.Drawing.Color]::FromArgb(90, 90, 90)
+
+# Helper
+function New-DragLabel {
+    param($text, $font, $color, $x, $y, $w, $h, $align)
+    $lbl = New-Object System.Windows.Forms.Label
+    $lbl.Text      = $text
+    $lbl.Font      = $font
+    $lbl.ForeColor = $color
+    $lbl.AutoSize  = $false
+    $lbl.Size      = New-Object System.Drawing.Size($w, $h)
+    $lbl.Location  = New-Object System.Drawing.Point($x, $y)
+    $lbl.TextAlign = $align
+    $lbl.BackColor = [System.Drawing.Color]::Transparent
+    $lbl.Add_MouseDown($dragDown)
+    $lbl.Add_MouseMove($dragMove)
+    $lbl.Add_MouseUp($dragUp)
+    $panel.Controls.Add($lbl)
+    return $lbl
+}
+
+# Title (2 lines)
+New-DragLabel "G O A T X" $fontTitle $clrTitle 5 8  428 42 "MiddleCenter" | Out-Null
+New-DragLabel "G O A T X" $fontTitle $clrTitle 5 50 428 42 "MiddleCenter" | Out-Null
+
+# Subtitle
+New-DragLabel "[+] CMD GOATX BY CUSTARD [+]" $fontSub $clrSub 5 96 428 20 "MiddleCenter" | Out-Null
+
+# Options
+$optStartY = 130
+$optSpacing = 34
+
+for ($i = 0; $i -lt $script:optionCount; $i++) {
+    $lbl = New-Object System.Windows.Forms.Label
+    $lbl.Text      = "  " + $script:options[$i].Label
+    $lbl.Font      = $fontOpt
+    $lbl.ForeColor = $clrOptDim
+    $lbl.AutoSize  = $false
+    $lbl.Size      = New-Object System.Drawing.Size(428, 30)
+    $lbl.Location  = New-Object System.Drawing.Point(5, ($optStartY + $i * $optSpacing))
+    $lbl.TextAlign = "MiddleCenter"
+    $lbl.BackColor = [System.Drawing.Color]::Transparent
+    $lbl.Cursor    = [System.Windows.Forms.Cursors]::Hand
+    $lbl.Tag       = $i
+    $lbl.Add_Click({
+        param($s, $e)
+        if (-not $script:isRunning) {
+            $script:selectedIndex = [int]$s.Tag
+            Update-Highlight
+            Execute-Selection
+        }
+    })
+    $panel.Controls.Add($lbl)
+    $script:labelControls += $lbl
+}
+
+# Hint
+New-DragLabel "Scroll to navigate, Enter to select" $fontHint $clrHint 5 210 428 16 "MiddleCenter" | Out-Null
+
+# ============================================================
+# --- 13. Highlight ---
+# ============================================================
+
+function Update-Highlight {
+    for ($i = 0; $i -lt $script:optionCount; $i++) {
+        if ($i -eq $script:selectedIndex) {
+            $script:labelControls[$i].Text      = "> " + $script:options[$i].Label
+            $script:labelControls[$i].ForeColor = $clrOptHi
+        } else {
+            $script:labelControls[$i].Text      = "  " + $script:options[$i].Label
+            $script:labelControls[$i].ForeColor = $clrOptDim
+        }
+    }
+}
+
+# ============================================================
+# --- 14. Execute ---
+# ============================================================
+
+function Execute-Selection {
+    if ($script:isRunning) { return }
+    $action = $script:options[$script:selectedIndex].Action
+
+    if ($action -eq "high") {
+        $script:isRunning = $true
+        $total = $AllTweaks.Count
+        $i = 0
+        foreach ($key in $AllTweaks.Keys) {
+            $i++
+            $script:labelControls[0].Text      = "> Running ($i/$total)..."
+            $script:labelControls[0].ForeColor = $clrOptHi
+            $script:labelControls[0].Refresh()
+            [System.Windows.Forms.Application]::DoEvents()
+            try { & $AllTweaks[$key] } catch {}
+        }
+        $script:labelControls[0].Text = "> Done"
+        $script:labelControls[0].Refresh()
+        Start-Sleep -Milliseconds 900
+        $script:isRunning = $false
+        Update-Highlight
+    }
+    else {
+        $form.Close()
+    }
+}
+
+# ============================================================
+# --- 15. Keyboard ---
+# ============================================================
+
+$form.Add_KeyDown({
+    param($s, $e)
+    if ($e.KeyCode -eq 'Escape') { $form.Close(); return }
+    if ($script:isRunning) { return }
+    switch ($e.KeyCode) {
+        'Up' {
+            $script:selectedIndex = ($script:selectedIndex - 1 + $script:optionCount) % $script:optionCount
+            Update-Highlight; $e.Handled = $true
+        }
+        'Down' {
+            $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount
+            Update-Highlight; $e.Handled = $true
+        }
+        'Enter' {
+            Execute-Selection; $e.Handled = $true
+        }
+    }
+})
+
+# ============================================================
+# --- 16. Scroll wheel ---
+# ============================================================
+
+$scrollHandler = {
+    param($s, $e)
+    if ($script:isRunning) { return }
+    if ($e.Delta -gt 0) {
+        $script:selectedIndex = ($script:selectedIndex - 1 + $script:optionCount) % $script:optionCount
+    } else {
+        $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount
+    }
+    Update-Highlight
+}
+
+$form.Add_MouseWheel($scrollHandler)
+$panel.Add_MouseWheel($scrollHandler)
+foreach ($ctrl in $panel.Controls) {
+    try { $ctrl.Add_MouseWheel($scrollHandler) } catch {}
+}
+
+# ============================================================
+# --- 17. Init & Run ---
+# ============================================================
+
+$form.Add_Shown({ $panel.Focus() })
+Update-Highlight
+[System.Windows.Forms.Application]::Run($form)
