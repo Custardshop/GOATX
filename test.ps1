@@ -489,6 +489,138 @@ $Tweak_GpuCacheCleanup = {
     Remove-Item -Path "$env:WINDIR\SoftwareDistribution\DeliveryOptimization\*" -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+$Tweak_MPODisable = {
+    # ปิด Multi-Plane Overlay — สาเหตุหลักของ stutter/frame drop บน NVIDIA
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
+    # ปิด MPO ฝั่ง DXGI scheduler
+    reg add "HKLM\SOFTWARE\Microsoft\DirectX\GraphicsSettings" /v SwapEffectUpgradeEnable /t REG_DWORD /d 0 /f | Out-Null
+}
+
+$Tweak_PciEAspm = {
+    # ปิด Active State Power Management ทั้ง PCI-E
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 0 | Out-Null
+    powercfg /setactive SCHEME_CURRENT | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\PnP\Pci" /v DisableASPM /t REG_DWORD /d 1 /f 2>$null | Out-Null
+    # ปิด PCI-E Link State Power Management
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\501a4d13-42af-4429-9fd1-a8218c268e20\ee12f2c1-98bb-455b-9e09-ae4c1e16cb45" /v Attributes /t REG_DWORD /d 2 /f | Out-Null
+    # ปิด NVMe ASPM
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\stornvme\Parameters\Device" /v NvmeDisableASPM /t REG_DWORD /d 1 /f 2>$null | Out-Null
+}
+
+$Tweak_ConnectedStandby = {
+    # ปิด Modern Standby (Connected Standby) — ป้องกัน sleep issues
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v CsEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v PlatformAoAcOverride /t REG_DWORD /d 0 /f | Out-Null
+    # ปิด Away Mode
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v AwayModeEnabled /t REG_DWORD /d 0 /f | Out-Null
+}
+
+$Tweak_TelemetryTasks = {
+    $tasks = @(
+        '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser'
+        '\Microsoft\Windows\Application Experience\ProgramDataUpdater'
+        '\Microsoft\Windows\Customer Experience Improvement Program\Consolidator'
+        '\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip'
+        '\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector'
+        '\Microsoft\Windows\Feedback\Siuf\DmClient'
+        '\Microsoft\Windows\Maps\MapsToastTask'
+        '\Microsoft\Windows\Maps\MapsUpdateTask'
+        '\Microsoft\Windows\Windows Error Reporting\QueueReporting'
+        '\Microsoft\Windows\CloudExperienceHost\CreateObjectTask'
+        '\Microsoft\Windows\PI\Sqm-Tasks'
+        '\Microsoft\Windows\Maintenance\WinSAT'
+        '\Microsoft\Windows\Autochk\Proxy'
+        '\Microsoft\Windows\Registry\RegIdleBackup'
+        '\Microsoft\Windows\MemoryDiagnostic\ProcessMemoryDiagnosticEvents'
+        '\Microsoft\Windows\MemoryDiagnostic\RunFullMemoryDiagnostic'
+        '\Microsoft\Windows\Mobile Broadband Accounts\MNO Metadata Parser'
+        '\Microsoft\Windows\Windows Filtering Platform\BfeOnServiceStartTypeChange'
+    )
+    foreach ($t in $tasks) {
+        Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null
+    }
+}
+
+$Tweak_WindowsAdsTips = {
+    # ปิด Start menu suggestions/ads
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SoftLandingEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v RotatingLockScreenOverlayEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v RotatingLockScreenEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-310093Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338393Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-353694Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-353696Enabled /t REG_DWORD /d 0 /f | Out-Null
+    # ปิด notification suggestions + tips
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowSyncProviderNotifications /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowInfoBar /t REG_DWORD /d 0 /f | Out-Null
+    # ปิด Get tips/suggestions/ads
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsConsumerFeatures /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableSoftLanding /t REG_DWORD /d 1 /f | Out-Null
+}
+
+$Tweak_AdditionalServices = {
+    $extraDisable = @(
+        'WpnService'            # Windows Push Notification
+        'WaaSMedicSvc'          # Windows Update Medic (reverts update settings)
+        'SSDPSRV'               # SSDP Discovery
+        'fdPHost'               # Function Discovery Provider
+        'FDResPub'              # Function Discovery Resource Publication
+        'Spooler'               # Print Spooler
+        'WbioSrvc'              # Windows Biometric
+        'CDPSvc'                # Connected Devices Platform
+        'CDPUserSvc'            # Connected Devices Platform User
+        'PcaSvc'                # Program Compatibility Assistant
+        'TroubleShootingSvc'    # Recommended Troubleshooting
+        'DusmSvc'               # Data Usage
+        'InstallService'        # Microsoft Store Install Service
+        'PhoneSvc'              # Phone Service
+        'TapiSrv'               # Telephony
+        'SEMgrSvc'              # Payments and NFC
+        'SharedAccess'          # Internet Connection Sharing
+        'RemoteAccess'          # Routing and Remote Access
+        'lmhosts'               # TCP/IP NetBIOS Helper
+        'WpcMonSvc'             # Parental Controls
+        'ScDeviceEnum'          # Smart Card Device Enumeration
+        'SCardSvr'              # Smart Card
+        'MessagingService'      # Messaging Service
+        'PimIndexMaintenanceSvc' # Contact Data
+        'OneSyncSvc'            # Sync Host
+        'AJRouter'              # AllJoyn Router
+    )
+    foreach ($s in $extraDisable) {
+        sc.exe stop $s 2>$null | Out-Null
+        sc.exe config $s start= disabled 2>$null | Out-Null
+    }
+}
+
+$Tweak_StandbyListCleaner = {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class MemClean {
+    [DllImport("ntdll.dll")]
+    public static extern int NtSetSystemInformation(int InfoClass, ref int Info, int Size);
+    public static void CleanStandby() {
+        int cmd = 1;
+        NtSetSystemInformation(80, ref cmd, 4);
+    }
+}
+"@ -ErrorAction SilentlyContinue
+    [MemClean]::CleanStandby()
+
+    # สร้าง scheduled task ให้เคลียร์ standby list ทุก 30 นาที
+    $helperPath = "$env:SystemRoot\System32\GOATX_StandbyClean.ps1"
+    @'
+Add-Type -TypeDefinition "using System;using System.Runtime.InteropServices;public class M{[DllImport(\"ntdll.dll\")]public static extern int NtSetSystemInformation(int i,ref int v,int s);public static void C(){int v=1;NtSetSystemInformation(80,ref v,4);}}"
+[M]::C()
+'@ | Out-File $helperPath -Encoding Unicode -Force
+    schtasks /Create /TN "GOATX_StandbyListCleaner" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$helperPath`"" /SC MINUTE /MO 30 /RL HIGHEST /F 2>$null | Out-Null
+}
+
 # ============================================================
 # --- 3. รายการปุ่ม ---
 # ============================================================
@@ -528,6 +660,13 @@ $AllTweaks = [ordered]@{
     "[32] Delivery Optimization"       = $Tweak_DeliveryOptimization
     "[33] Device Power Management"     = $Tweak_DevicePower
     "[34] GPU Cache Cleanup"           = $Tweak_GpuCacheCleanup
+    "[35] MPO Disable"                 = $Tweak_MPODisable
+    "[36] PCI-E ASPM"                  = $Tweak_PciEAspm
+    "[37] Connected Standby"           = $Tweak_ConnectedStandby
+    "[38] Telemetry Tasks"             = $Tweak_TelemetryTasks
+    "[39] Windows Ads and Tips"        = $Tweak_WindowsAdsTips
+    "[40] Additional Services"         = $Tweak_AdditionalServices
+    "[41] Standby List Cleaner"        = $Tweak_StandbyListCleaner
 }
 
 # ============================================================
