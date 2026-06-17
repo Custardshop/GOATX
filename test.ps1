@@ -243,12 +243,13 @@ $Tweak_PrivacyTelemetry = {
 }
 
 $Tweak_Services = {
-    $disableList = @('DiagTrack','WSearch','MapsBroker','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','Fax','RetailDemo','RemoteRegistry','WerSvc')
+    # WSearch 保留 — ใช้ค้นหาไฟล์
+    $disableList = @('DiagTrack','MapsBroker','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','Fax','RetailDemo','RemoteRegistry','WerSvc')
     foreach ($s in $disableList) {
         sc.exe stop $s 2>$null | Out-Null
         sc.exe config $s start= disabled 2>$null | Out-Null
     }
-    $autoList = @('Audiosrv','AudioEndpointBuilder','Dhcp','NlaSvc','Netman','WlanSvc','RpcSs','EventLog','PlugPlay','LanmanWorkstation','LanmanServer')
+    $autoList = @('Audiosrv','AudioEndpointBuilder','Dhcp','NlaSvc','Netman','WlanSvc','RpcSs','EventLog','PlugPlay','LanmanWorkstation','LanmanServer','WSearch')
     foreach ($s in $autoList) {
         sc.exe config $s start= auto 2>$null | Out-Null
         sc.exe start $s 2>$null | Out-Null
@@ -490,28 +491,21 @@ $Tweak_GpuCacheCleanup = {
 }
 
 $Tweak_MPODisable = {
-    # ปิด Multi-Plane Overlay — สาเหตุหลักของ stutter/frame drop บน NVIDIA
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
-    # ปิด MPO ฝั่ง DXGI scheduler
     reg add "HKLM\SOFTWARE\Microsoft\DirectX\GraphicsSettings" /v SwapEffectUpgradeEnable /t REG_DWORD /d 0 /f | Out-Null
 }
 
 $Tweak_PciEAspm = {
-    # ปิด Active State Power Management ทั้ง PCI-E
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 0 | Out-Null
     powercfg /setactive SCHEME_CURRENT | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PnP\Pci" /v DisableASPM /t REG_DWORD /d 1 /f 2>$null | Out-Null
-    # ปิด PCI-E Link State Power Management
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\501a4d13-42af-4429-9fd1-a8218c268e20\ee12f2c1-98bb-455b-9e09-ae4c1e16cb45" /v Attributes /t REG_DWORD /d 2 /f | Out-Null
-    # ปิด NVMe ASPM
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\stornvme\Parameters\Device" /v NvmeDisableASPM /t REG_DWORD /d 1 /f 2>$null | Out-Null
 }
 
 $Tweak_ConnectedStandby = {
-    # ปิด Modern Standby (Connected Standby) — ป้องกัน sleep issues
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v CsEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v PlatformAoAcOverride /t REG_DWORD /d 0 /f | Out-Null
-    # ปิด Away Mode
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v AwayModeEnabled /t REG_DWORD /d 0 /f | Out-Null
 }
 
@@ -542,7 +536,6 @@ $Tweak_TelemetryTasks = {
 }
 
 $Tweak_WindowsAdsTips = {
-    # ปิด Start menu suggestions/ads
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SoftLandingEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v RotatingLockScreenOverlayEnabled /t REG_DWORD /d 0 /f | Out-Null
@@ -553,43 +546,41 @@ $Tweak_WindowsAdsTips = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338393Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-353694Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-353696Enabled /t REG_DWORD /d 0 /f | Out-Null
-    # ปิด notification suggestions + tips
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowSyncProviderNotifications /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowInfoBar /t REG_DWORD /d 0 /f | Out-Null
-    # ปิด Get tips/suggestions/ads
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsConsumerFeatures /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableSoftLanding /t REG_DWORD /d 1 /f | Out-Null
 }
 
 $Tweak_AdditionalServices = {
     $extraDisable = @(
-        'WpnService'            # Windows Push Notification
-        'WaaSMedicSvc'          # Windows Update Medic (reverts update settings)
-        'SSDPSRV'               # SSDP Discovery
-        'fdPHost'               # Function Discovery Provider
-        'FDResPub'              # Function Discovery Resource Publication
-        'Spooler'               # Print Spooler
-        'WbioSrvc'              # Windows Biometric
-        'CDPSvc'                # Connected Devices Platform
-        'CDPUserSvc'            # Connected Devices Platform User
-        'PcaSvc'                # Program Compatibility Assistant
-        'TroubleShootingSvc'    # Recommended Troubleshooting
-        'DusmSvc'               # Data Usage
-        'InstallService'        # Microsoft Store Install Service
-        'PhoneSvc'              # Phone Service
-        'TapiSrv'               # Telephony
-        'SEMgrSvc'              # Payments and NFC
-        'SharedAccess'          # Internet Connection Sharing
-        'RemoteAccess'          # Routing and Remote Access
-        'lmhosts'               # TCP/IP NetBIOS Helper
-        'WpcMonSvc'             # Parental Controls
-        'ScDeviceEnum'          # Smart Card Device Enumeration
-        'SCardSvr'              # Smart Card
-        'MessagingService'      # Messaging Service
-        'PimIndexMaintenanceSvc' # Contact Data
-        'OneSyncSvc'            # Sync Host
-        'AJRouter'              # AllJoyn Router
+        'WpnService'
+        'WaaSMedicSvc'
+        'SSDPSRV'
+        'fdPHost'
+        'FDResPub'
+        'Spooler'
+        'WbioSrvc'
+        'CDPSvc'
+        'CDPUserSvc'
+        'PcaSvc'
+        'TroubleShootingSvc'
+        'DusmSvc'
+        'InstallService'
+        'PhoneSvc'
+        'TapiSrv'
+        'SEMgrSvc'
+        'SharedAccess'
+        'RemoteAccess'
+        'lmhosts'
+        'WpcMonSvc'
+        'ScDeviceEnum'
+        'SCardSvr'
+        'MessagingService'
+        'PimIndexMaintenanceSvc'
+        'OneSyncSvc'
+        'AJRouter'
     )
     foreach ($s in $extraDisable) {
         sc.exe stop $s 2>$null | Out-Null
@@ -612,13 +603,120 @@ public class MemClean {
 "@ -ErrorAction SilentlyContinue
     [MemClean]::CleanStandby()
 
-    # สร้าง scheduled task ให้เคลียร์ standby list ทุก 30 นาที
     $helperPath = "$env:SystemRoot\System32\GOATX_StandbyClean.ps1"
     @'
 Add-Type -TypeDefinition "using System;using System.Runtime.InteropServices;public class M{[DllImport(\"ntdll.dll\")]public static extern int NtSetSystemInformation(int i,ref int v,int s);public static void C(){int v=1;NtSetSystemInformation(80,ref v,4);}}"
 [M]::C()
 '@ | Out-File $helperPath -Encoding Unicode -Force
     schtasks /Create /TN "GOATX_StandbyListCleaner" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$helperPath`"" /SC MINUTE /MO 30 /RL HIGHEST /F 2>$null | Out-Null
+}
+
+# ============================================================
+# --- Block 42–48 (ใหม่) ---
+# ============================================================
+
+$Tweak_OverlayKiller = {
+    # NVIDIA Overlay — เก็บไว้ (ใช้ Instant Replay + Record)
+    # ปิด Steam Overlay
+    reg add "HKCU\SOFTWARE\Valve\Steam" /v EnableGameOverlay /t REG_SZ /d 0 /f 2>$null | Out-Null
+    # ปิด Discord Overlay
+    reg add "HKCU\SOFTWARE\Discord" /v EnableHardwareAcceleration /t REG_SZ /d 0 /f 2>$null | Out-Null
+    # ปิด EA App overlay
+    reg add "HKLM\SOFTWARE\EA\EA Desktop" /v EnableOverlay /t REG_DWORD /d 0 /f 2>$null | Out-Null
+    # ปิด Xbox Game Bar overlay
+    reg add "HKCU\Software\Microsoft\GameBar" /v UseNexusForGameBarEnabled /t REG_DWORD /d 0 /f | Out-Null
+}
+
+$Tweak_NetworkNoise = {
+    # NlaSvc 保留 — ปิดแล้ว firewall rules เพี้ยน อันตราย
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v EnableMulticast /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v DisableBandwidthThrottling /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v DisableLargeMtu /t REG_DWORD /d 0 /f | Out-Null
+    Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force -ErrorAction SilentlyContinue
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v NonBestEffortLimit /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\SSDPSRV" /v Start /t REG_DWORD /d 4 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\fdPHost" /v Start /t REG_DWORD /d 4 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\FDResPub" /v Start /t REG_DWORD /d 4 /f | Out-Null
+}
+
+$Tweak_DiagnosticServices = {
+    $diagList = @('DPS','WdiServiceHost','WdiSystemHost','diagnosticshub.standardcollector.service','diagsvc','TroubleShootingSvc')
+    foreach ($s in $diagList) {
+        sc.exe stop $s 2>$null | Out-Null
+        sc.exe config $s start= disabled 2>$null | Out-Null
+    }
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v Disabled /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v LoggingDisabled /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v AutoApproveOSDumps /t REG_DWORD /d 0 /f | Out-Null
+}
+
+$Tweak_SystemRestoreOff = {
+    Disable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
+    vssadmin delete shadows /all /quiet 2>$null | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v RPSessionInterval /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v DisableSR /t REG_DWORD /d 1 /f | Out-Null
+}
+
+$Tweak_AdditionalServices2 = {
+    $extraDisable2 = @(
+        'iphlpsvc'
+        'WinRM'
+        'wercplsupport'
+        'WerSvc'
+        'TabletInputService'
+        'WMPNetworkSvc'
+        'UevAgentService'
+        'DsSvc'
+        'DialogBlockingService'
+        'lfsvc'
+        'wisvc'
+        'WalletService'
+        'DsRoleSvc'
+        'NcaSvc'
+        'NcdAutoSetup'
+        'icssvc'
+        'SEMgrSvc'
+    )
+    foreach ($s in $extraDisable2) {
+        sc.exe stop $s 2>$null | Out-Null
+        sc.exe config $s start= disabled 2>$null | Out-Null
+    }
+}
+
+$Tweak_SpotlightClipboard = {
+    reg add "HKCU\Software\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsSpotlightFeatures /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v RotatingLockScreenEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v RotatingLockScreenOverlayEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel" /v "{2cc5ca98-6485-489a-920e-b3e88a6ccce3}" /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v AllowClipboardHistory /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v AllowCrossDeviceClipboard /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableMmx /t REG_DWORD /d 0 /f | Out-Null
+    sc.exe stop PhoneSvc 2>$null | Out-Null
+    sc.exe config PhoneSvc start= disabled 2>$null | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableActivityFeed /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v PublishUserActivities /t REG_DWORD /d 0 /f | Out-Null
+}
+
+$Tweak_NvidiaTelemetry = {
+    # NvTelemetryContainer 保留 — GeForce Experience overlay ต้องใช้
+    # ปิด NVIDIA crash report tasks
+    $nvTasks = @(
+        '\NVIDIA\NvDriverUpdateCheckDaily{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
+        '\NVIDIA\NvTmRep_CrashReport1_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
+        '\NVIDIA\NvTmRep_CrashReport2_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
+        '\NVIDIA\NvTmRep_CrashReport3_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
+        '\NVIDIA\NvTmRep_CrashReport4_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
+        '\NVIDIA\NvTmMon_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
+    )
+    foreach ($t in $nvTasks) {
+        Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null
+    }
+    # ปิด NVIDIA telemetry ผ่าน registry
+    $nvTelemetryPath = "HKLM:\SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client"
+    if (Test-Path $nvTelemetryPath) {
+        Set-ItemProperty -Path $nvTelemetryPath -Name 'OptInOrOutPreference' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # ============================================================
@@ -667,13 +765,19 @@ $AllTweaks = [ordered]@{
     "[39] Windows Ads and Tips"        = $Tweak_WindowsAdsTips
     "[40] Additional Services"         = $Tweak_AdditionalServices
     "[41] Standby List Cleaner"        = $Tweak_StandbyListCleaner
+    "[42] Overlay Killer"              = $Tweak_OverlayKiller
+    "[43] Network Noise"               = $Tweak_NetworkNoise
+    "[44] Diagnostic Services"         = $Tweak_DiagnosticServices
+    "[45] System Restore Off"          = $Tweak_SystemRestoreOff
+    "[46] Additional Services v2"      = $Tweak_AdditionalServices2
+    "[47] Spotlight and Clipboard"     = $Tweak_SpotlightClipboard
+    "[48] NVIDIA Telemetry"            = $Tweak_NvidiaTelemetry
 }
 
 # ============================================================
 # --- 4. GUI ---
 # ============================================================
 
-# State
 $script:selectedIndex = 0
 $script:isRunning     = $false
 $script:optionCount   = 2
@@ -683,20 +787,16 @@ $script:options = @(
     @{ Label = "[2] Exit"; Action = "exit" }
 )
 
-# --- สี Gradient ทั้งหมด ---
-# สีสว่าง (selected / title)
 $script:GradBright = @(
     [System.Drawing.Color]::FromArgb(80, 200, 255),
     [System.Drawing.Color]::FromArgb(180, 120, 255),
     [System.Drawing.Color]::FromArgb(255, 120, 180)
 )
-# สีกลาง (subtitle)
 $script:GradMid = @(
     [System.Drawing.Color]::FromArgb(100, 180, 220),
     [System.Drawing.Color]::FromArgb(160, 130, 220),
     [System.Drawing.Color]::FromArgb(220, 140, 190)
 )
-# สีมืด (unselected option) — ต้องสว่างพอให้เห็นชัดที่ opacity 0.75
 $script:GradDim = @(
     [System.Drawing.Color]::FromArgb(60, 110, 140),
     [System.Drawing.Color]::FromArgb(110, 70, 140),
@@ -704,11 +804,9 @@ $script:GradDim = @(
 )
 $script:GradPos = @(0.0, 0.5, 1.0)
 
-# สี hint
 $clrBg   = [System.Drawing.Color]::Black
 $clrHint = [System.Drawing.Color]::FromArgb(120, 120, 120)
 
-# --- สร้างหน้าต่าง ---
 $form = New-Object System.Windows.Forms.Form
 $form.Text            = "GOATX"
 $form.StartPosition   = "CenterScreen"
@@ -720,16 +818,12 @@ $form.KeyPreview      = $true
 $form.Opacity         = 0.85
 $form.ClientSize      = New-Object System.Drawing.Size(450, 235)
 
-# Panel
 $panel = New-Object System.Windows.Forms.Panel
 $panel.Dock      = "Fill"
 $panel.BackColor = $clrBg
 $panel.TabStop   = $true
 $form.Controls.Add($panel)
 
-# ============================================================
-# Helper: สร้าง gradient text panel (สำหรับ title + subtitle)
-# ============================================================
 function New-GradientLabel {
     param(
         [string]$text,
@@ -743,8 +837,6 @@ function New-GradientLabel {
     $pnl.Size      = New-Object System.Drawing.Size($w, $h)
     $pnl.Location  = New-Object System.Drawing.Point($x, $y)
     $pnl.BackColor = [System.Drawing.Color]::Transparent
-
-    # เก็บ parameter ไว้ใน hashtable แล้ว attach ไปกับ panel
     $drawParams = @{
         Text      = $text
         FontSize  = $fontSize
@@ -753,17 +845,14 @@ function New-GradientLabel {
         Positions = $positions
     }
     $pnl.Tag = $drawParams
-
     $pnl.Add_Paint({
         param($s, $e)
         $dp     = $s.Tag
         $font   = New-Object System.Drawing.Font("Consolas", $dp.FontSize, $dp.Style)
         $colors = $dp.Colors
         $pos    = $dp.Positions
-
         $e.Graphics.SmoothingMode     = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
         $e.Graphics.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAlias
-
         $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
             (New-Object System.Drawing.Point(0, 0)),
             (New-Object System.Drawing.Point($s.Width, 0)),
@@ -775,48 +864,30 @@ function New-GradientLabel {
             $blend.Positions = $pos
             $brush.InterpolationColors = $blend
         }
-
         $sf  = New-Object System.Drawing.StringFormat
         $sf.Alignment     = [System.Drawing.StringAlignment]::Center
         $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
-
         $rect = New-Object System.Drawing.RectangleF(0, 0, $s.Width, $s.Height)
         $e.Graphics.DrawString($dp.Text, $font, $brush, $rect, $sf)
-
         $brush.Dispose(); $font.Dispose(); $sf.Dispose()
     })
-
     $panel.Controls.Add($pnl)
     return $pnl
 }
 
-# ============================================================
-# Title (gradient paint panel)
-# ============================================================
 New-GradientLabel -text "G O A T X" -fontSize 22 `
     -style ([System.Drawing.FontStyle]::Bold) `
     -colors $script:GradBright -positions $script:GradPos `
     -x 10 -y 20 -w 430 -h 42 | Out-Null
 
-# ============================================================
-# Subtitle (gradient paint panel)
-# ============================================================
 New-GradientLabel -text "[+] CMD GOATX BY CUSTARD [+]" -fontSize 10 `
     -style ([System.Drawing.FontStyle]::Regular) `
     -colors $script:GradMid -positions $script:GradPos `
     -x 10 -y 66 -w 430 -h 22 | Out-Null
 
-# ============================================================
-# Options — ใช้ Label ปกติ (เสถียร) แล้ว set ForeColor
-# เป็นสี solid จาก palette เดียวกับ gradient
-# ============================================================
-
-# สี solid ที่ match gradient
-$clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)   # ม่วง-ฟ้าสว่าง (selected)
-$clrOptDim = [System.Drawing.Color]::FromArgb(90, 75, 110)     # ม่วงมืด (unselected)
-
+$clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)
+$clrOptDim = [System.Drawing.Color]::FromArgb(90, 75, 110)
 $fontOpt = New-Object System.Drawing.Font("Consolas", 12)
-
 $optStartY  = 104
 $optSpacing = 32
 
@@ -844,7 +915,6 @@ for ($i = 0; $i -lt $script:optionCount; $i++) {
     $script:labelControls += $lbl
 }
 
-# Hint
 $fontHint = New-Object System.Drawing.Font("Consolas", 8)
 $hintLbl = New-Object System.Windows.Forms.Label
 $hintLbl.Text      = "Arrow keys to navigate, Enter to select"
@@ -857,7 +927,6 @@ $hintLbl.TextAlign = "MiddleCenter"
 $hintLbl.BackColor = [System.Drawing.Color]::Transparent
 $panel.Controls.Add($hintLbl)
 
-# --- AcceptButton (hidden) ---
 $hiddenAcceptBtn = New-Object System.Windows.Forms.Button
 $hiddenAcceptBtn.Size     = New-Object System.Drawing.Size(1, 1)
 $hiddenAcceptBtn.Location = New-Object System.Drawing.Point(-100, -100)
@@ -867,10 +936,6 @@ $form.AcceptButton = $hiddenAcceptBtn
 $hiddenAcceptBtn.Add_Click({
     if (-not $script:isRunning) { Execute-Selection }
 })
-
-# ============================================================
-# --- 5. Highlight ---
-# ============================================================
 
 function Update-Highlight {
     for ($i = 0; $i -lt $script:optionCount; $i++) {
@@ -884,14 +949,9 @@ function Update-Highlight {
     }
 }
 
-# ============================================================
-# --- 6. Execute ---
-# ============================================================
-
 function Execute-Selection {
     if ($script:isRunning) { return }
     $action = $script:options[$script:selectedIndex].Action
-
     if ($action -eq "high") {
         $script:isRunning = $true
         $total = $AllTweaks.Count
@@ -914,10 +974,6 @@ function Execute-Selection {
         $form.Close()
     }
 }
-
-# ============================================================
-# --- 7. Keyboard ---
-# ============================================================
 
 $script:KeyHandler = {
     param($s, $e)
@@ -942,10 +998,6 @@ $script:KeyHandler = {
 $form.Add_KeyDown($script:KeyHandler)
 $panel.Add_KeyDown($script:KeyHandler)
 
-# ============================================================
-# --- 8. Scroll wheel ---
-# ============================================================
-
 $scrollHandler = {
     param($s, $e)
     if ($script:isRunning) { return }
@@ -965,9 +1017,5 @@ foreach ($ctrl in $panel.Controls) {
 
 $form.Add_Shown({ $panel.Focus() })
 Update-Highlight
-
-# ============================================================
-# --- 9. Run ---
-# ============================================================
 
 [System.Windows.Forms.Application]::Run($form)
