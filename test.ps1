@@ -398,7 +398,7 @@ $Tweak_MemCompression = {
 }
 
 $Tweak_MMCSSDisplay = {
-    $base = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Display Post Processing"
+    $base = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Display Post Processing"
     reg add "$base" /v "GPU Priority" /t REG_DWORD /d 31 /f | Out-Null
     reg add "$base" /v Priority /t REG_DWORD /d 8 /f | Out-Null
     reg add "$base" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
