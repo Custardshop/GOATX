@@ -26,7 +26,7 @@ Add-Type -AssemblyName System.Drawing
 
 # ============================================================
 # [01] Kernel + Timer (TSC optimal for Win10)
-# ลบ useplatformtick/useplatformclock ให้ CPU ใช้ TSC (เร็วสุด)
+# FIX: ลบ synthetictimers (ไม่ใช่ valid BCD option)
 # ============================================================
 $Tweak_KernelTimer = {
     bcdedit /deletevalue useplatformclock 2>$null | Out-Null
@@ -34,14 +34,11 @@ $Tweak_KernelTimer = {
     bcdedit /set disabledynamictick yes | Out-Null
     bcdedit /set tscsyncpolicy Enhanced | Out-Null
     bcdedit /set nx OptOut | Out-Null
-    bcdedit /set synthetictimers yes | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v DisablePagingExecutive /t REG_DWORD /d 1 /f | Out-Null
 }
 
 # ============================================================
 # [02] Timer Resolution
-# บอก Windows ให้ request 0.5ms timer (default 15.6ms)
-# ทุก interrupt/service ตอบสนองเร็วขึ้น 30x
 # ============================================================
 $Tweak_TimerResolution = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v GlobalTimerResolutionRequests /t REG_DWORD /d 1 /f | Out-Null
@@ -49,12 +46,10 @@ $Tweak_TimerResolution = {
 
 # ============================================================
 # [03] Process Priority
-# Win32PrioritySeparation=42 = short quantum + foreground boost
-# SystemResponsiveness=0 = reserve 0% CPU ให้ background
-# Games task = High priority + GPU priority 8
+# FIX: ลบ Win32PrioritySeparation (ย้ายไป [70] ที่เดียว)
+# FIX: ลบ EnablePrefetcher/EnableSuperfetch (ย้ายไป [70])
 # ============================================================
 $Tweak_ProcessPriority = {
-    reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32PrioritySeparation /t REG_DWORD /d 42 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control" /v SvcHostSplitThresholdInKB /t REG_DWORD /d 33554432 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v SystemResponsiveness /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f | Out-Null
@@ -71,8 +66,6 @@ $Tweak_ProcessPriority = {
 
 # ============================================================
 # [04] IRQ MSI Mode
-# เปลี่ยน legacy shared IRQ เป็น MSI (per-device message)
-# ไม่ต้องรอคิว interrupt line เดียวกัน
 # ============================================================
 $Tweak_IrqMsiMode = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -88,15 +81,12 @@ $Tweak_IrqMsiMode = {
 
 # ============================================================
 # [05] Memory Management
-# ปิด Superfetch (ใช้ CPU+I/O), เปิด Prefetcher (app launch เร็ว)
-# ปิด hibernate, kill OneDrive, ปิด pagefile clear
+# FIX: ลบ EnablePrefetcher/EnableSuperfetch (ย้ายไป [70] ที่เดียว)
 # ============================================================
 $Tweak_MemoryManagement = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v SystemCacheDirtyPageThreshold /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v ClearPageFileAtShutdown /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v LargeSystemCache /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnablePrefetcher /t REG_DWORD /d 3 /f | Out-Null
-    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
     powercfg -h off | Out-Null
     taskkill /f /im OneDrive.exe 2>$null | Out-Null
     reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v OneDrive /f 2>$null | Out-Null
@@ -104,12 +94,10 @@ $Tweak_MemoryManagement = {
 
 # ============================================================
 # [06] Storage
-# ปิด 8.3 filename (เก่า), ปิด last access timestamp
-# เปิด TRIM สำหรับ SSD, retrim ทุก drive
+# FIX: ลบ fsutil disablelastaccess (ย้ายไป [69] ที่เดียว)
 # ============================================================
 $Tweak_Storage = {
     fsutil behavior set disable8dot3 1 | Out-Null
-    fsutil behavior set disablelastaccess 1 | Out-Null
     fsutil behavior set disabledeletenotify 0 | Out-Null
     Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter } | ForEach-Object {
         Optimize-Volume -DriveLetter $_.DriveLetter -ReTrim -ErrorAction SilentlyContinue
@@ -118,10 +106,6 @@ $Tweak_Storage = {
 
 # ============================================================
 # [07] Input and USB
-# เมาส์/คีย์บอร์ด queue ลด 100->16 (input lag ลด)
-# ปิด mouse acceleration (1:1 raw input)
-# ปิด USB selective suspend (ไม่ sleep อุปกรณ์ input)
-# ปิด sticky/toggle keys (ไม่ popup ตอนเล่นเกม)
 # ============================================================
 $Tweak_InputUSB = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\mouclass\Parameters" /v MouseDataQueueSize /t REG_DWORD /d 16 /f | Out-Null
@@ -142,8 +126,6 @@ $Tweak_InputUSB = {
 
 # ============================================================
 # [08] Nagle Algorithm
-# ปิด Nagle = ส่ง packet ทันทีไม่รวม batch
-# ลด latency 1-2 packet delay สำหรับเกม
 # ============================================================
 $Tweak_Nagle = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -155,8 +137,6 @@ $Tweak_Nagle = {
 
 # ============================================================
 # [09] Visual Effects
-# ปิด animation, transparency, shadow ทั้งหมด
-# ประหยัด GPU/CPU cycles ทุก frame
 # ============================================================
 $Tweak_VisualEffects = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f | Out-Null
@@ -169,8 +149,6 @@ $Tweak_VisualEffects = {
 
 # ============================================================
 # [10] GameBar DVR + Game Mode OFF
-# ปิด Game Bar overlay + background recording (FPS +3-5%)
-# ปิด Game Mode (ไม่ต้องการ)
 # ============================================================
 $Tweak_GameBarDVR = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR" /v AppCaptureEnabled /t REG_DWORD /d 0 /f | Out-Null
@@ -184,8 +162,6 @@ $Tweak_GameBarDVR = {
 
 # ============================================================
 # [11] Processor Power
-# CPU 100% min+max (ไม่ downclock)
-# ปิด hibernate + fast startup
 # ============================================================
 $Tweak_ProcessorPower = {
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 | Out-Null
@@ -197,8 +173,6 @@ $Tweak_ProcessorPower = {
 
 # ============================================================
 # [12] CPU Core Parking
-# ปิด core parking = ทุก core active ตลอด
-# ไม่มี wake-up delay 50-100ms
 # ============================================================
 $Tweak_CoreParking = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\0cc5b647-c1df-4637-891a-dec35c318583" /v ValueMin /t REG_DWORD /d 0 /f | Out-Null
@@ -211,8 +185,6 @@ $Tweak_CoreParking = {
 
 # ============================================================
 # [13] GPU and Display (HAGS OFF)
-# HwSchMode=1 = HAGS OFF (ตามที่ต้องการ)
-# TdrLevel=2 + TdrDelay=60 = GPU recover ได้ถ้าแฮงก์
 # ============================================================
 $Tweak_GpuDisplay = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 1 /f | Out-Null
@@ -223,8 +195,6 @@ $Tweak_GpuDisplay = {
 
 # ============================================================
 # [14] Audio Latency
-# Pro Audio task = High scheduling, ใช้ core 0-2
-# ปล่อย core 3+ ให้เกมทั้งหมด
 # ============================================================
 $Tweak_AudioLatency = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
@@ -238,9 +208,8 @@ $Tweak_AudioLatency = {
 
 # ============================================================
 # [15] Network and DNS
-# RSS=multi-core packet, TCP Fast Open, ECN, ปิด Nagle global
-# DNS=Cloudflare+Google, ปิด LLMNR, ปิด NetBIOS
-# ปิด Interrupt Moderation = ไม่ batch interrupt
+# FIX: ลบ template=custom (ไม่ valid)
+# FIX: ลบ Tcp1323Opts (ย้ายไป [56] ที่เดียว)
 # ============================================================
 $Tweak_NetworkDNS = {
     netsh int tcp set global rss=enabled | Out-Null
@@ -252,9 +221,6 @@ $Tweak_NetworkDNS = {
     netsh int tcp set global ecncapability=enabled | Out-Null
     netsh int tcp set global fastopen=enabled | Out-Null
     netsh int udp set global uro=disabled | Out-Null
-    netsh int tcp set supplemental template=custom congestionprovider=cubic | Out-Null
-    netsh int tcp set supplemental template=custom icw=10 | Out-Null
-    netsh int tcp set supplemental template=custom initialrto=750 | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v NonBestEffortLimit /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TCPNoDelay /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpAckFrequency /t REG_DWORD /d 1 /f | Out-Null
@@ -263,7 +229,6 @@ $Tweak_NetworkDNS = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnablePMTUDiscovery /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnableRSS /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v EnableTCPChimney /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v Tcp1323Opts /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v FastSendDatagramThreshold /t REG_DWORD /d 65536 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DefaultReceiveWindow /t REG_DWORD /d 16384 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DefaultSendWindow /t REG_DWORD /d 16384 /f | Out-Null
@@ -286,8 +251,6 @@ $Tweak_NetworkDNS = {
 
 # ============================================================
 # [16] Privacy and Telemetry
-# ปิด telemetry data collection ทั้งหมด
-# ปิด Cortana, error reporting, activity feed, location
 # ============================================================
 $Tweak_PrivacyTelemetry = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
@@ -306,9 +269,7 @@ $Tweak_PrivacyTelemetry = {
 }
 
 # ============================================================
-# [17] Windows Services (WSearch 保留 auto)
-# ปิด DiagTrack, Xbox, Fax, RetailDemo, RemoteRegistry
-# 保留 WSearch, Audio, Network, EventLog
+# [17] Windows Services
 # ============================================================
 $Tweak_Services = {
     $disableList = @('DiagTrack','MapsBroker','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','Fax','RetailDemo','RemoteRegistry','WerSvc')
@@ -319,8 +280,6 @@ $Tweak_Services = {
 
 # ============================================================
 # [18] Junk and Log Cleanup
-# ลบ temp files, Windows Update cache, event logs, recycle bin
-# ไม่แตะ SoftwareDistribution folder (ลบแค่ Download)
 # ============================================================
 $Tweak_JunkCleanup = {
     Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
@@ -335,80 +294,8 @@ $Tweak_JunkCleanup = {
 }
 
 # ============================================================
-# [19] Display Post Processing
-# GPU Priority 31 (max) สำหรับ display pipeline
-# ไม่ให้ frame ถูก delay โดย background render
-# ============================================================
-$Tweak_MMCSSDisplay = {
-    $base = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Display Post Processing"
-    reg add "$base" /v "GPU Priority" /t REG_DWORD /d 31 /f | Out-Null
-    reg add "$base" /v Priority /t REG_DWORD /d 8 /f | Out-Null
-    reg add "$base" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
-    reg add "$base" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
-    reg add "$base" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
-    reg add "$base" /v "Background Only" /t REG_SZ /d False /f | Out-Null
-    reg add "$base" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
-}
-
-# ============================================================
-# [20] System.ini / Win.ini
-# เขียนค่า legacy compatibility tweaks ลง INI files
-# [386Enh] section = timer/I/O tuning สำหรับ 16-bit compatibility
-# ============================================================
-$Tweak_IniCompat = {
-    $systemIni = Join-Path $env:windir 'system.ini'
-    $winIni    = Join-Path $env:windir 'win.ini'
-    $marker    = "; GOATX_TWEAK_MARKER"
-    foreach ($f in @($systemIni, $winIni)) {
-        if (-not (Test-Path "$f.backup")) { Copy-Item $f "$f.backup" -Force -ErrorAction SilentlyContinue }
-        $content = Get-Content $f -ErrorAction SilentlyContinue
-        if ($content) {
-            $markerIdx = -1
-            for ($j = 0; $j -lt $content.Count; $j++) { if ($content[$j] -match 'GOATX_TWEAK_MARKER') { $markerIdx = $j; break } }
-            if ($markerIdx -ge 0) { $trimmed = $content[0..($markerIdx - 1)]; Set-Content $f ($trimmed -join "`r`n") -Force }
-        }
-    }
-    $tweakBlock = @"
-$marker
-; for 16-bit app support
-[386Enh]
-MinTimeSlice=1
-AvgTimeSlice=1
-MaxTimeSlice=1
-WinTimeSlice=1,1
-NetAsyncTimeout=0
-SyncTimeDivisor=1
-TimeWindowMinutes=0
-Latency=1
-SampleRate=1
-UseHWTimeStamp=1
-Auto-Detect-CPU=TRUE
-CpuSnooze=0
-MaxBiosPipes=128
-MinBiosPipes=128
-DoubleBuffer=0
-Chunksize=5000000
-LoadTop=0
-SystemReg=0
-FastBlt=1
-[drivers]
-wave=mmdrv.dll
-timer=timer.drv
-[mci]
-mciwave=mmsystem.dll
-[timer]
-TimeSliceUpdateTickCount=1
-[NonWindowsApp]
-MouseExclusive=1
-"@
-    Add-Content $systemIni "`r`n$tweakBlock"
-    Add-Content $winIni    "`r`n$tweakBlock"
-}
-
-# ============================================================
-# [21] Interrupt Affinity
+# [19] Interrupt Affinity (was [21])
 # GPU = Core 1, NIC = Core 2, USB = Core 3
-# แยก IRQ ไม่ให้ share core กับ game thread
 # ============================================================
 $Tweak_InterruptAffinity = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -432,9 +319,7 @@ $Tweak_InterruptAffinity = {
 }
 
 # ============================================================
-# [22] NIC Advanced
-# ปิด interrupt moderation, flow control, EEE, Green Ethernet
-# เปิด receive/transmit buffers 2048, ปิด RSC
+# [20] NIC Advanced
 # ============================================================
 $Tweak_NICAdvanced = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
@@ -451,9 +336,7 @@ $Tweak_NICAdvanced = {
 }
 
 # ============================================================
-# [23] Hyper-V and VBS
-# ปิด hypervisor layer (CPU overhead 2-5%)
-# ปิด VBS, HVCI, Credential Guard
+# [21] Hyper-V and VBS
 # ============================================================
 $Tweak_HyperV = {
     dism /Online /Disable-Feature /FeatureName:Microsoft-Hyper-V-All /NoRestart 2>$null | Out-Null
@@ -465,8 +348,7 @@ $Tweak_HyperV = {
 }
 
 # ============================================================
-# [24] Timer Resolution Runtime
-# Force 0.5ms timer ทันที + scheduled task ทุก boot
+# [22] Timer Resolution Runtime
 # ============================================================
 $Tweak_TimerResRuntime = {
     Add-Type -TypeDefinition @"
@@ -492,8 +374,7 @@ while($true){Start-Sleep -Seconds 120}
 }
 
 # ============================================================
-# [25] Spectre and Meltdown
-# ปิด CPU mitigation (เพิ่ม latency ทุก syscall 5-30%)
+# [23] Spectre and Meltdown
 # ============================================================
 $Tweak_SpectreMeltdown = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v FeatureSettingsOverride /t REG_DWORD /d 3 /f | Out-Null
@@ -501,17 +382,14 @@ $Tweak_SpectreMeltdown = {
 }
 
 # ============================================================
-# [26] Memory Compression
-# ปิด Windows memory compression (ใช้ CPU cycles)
+# [24] Memory Compression
 # ============================================================
 $Tweak_MemCompression = {
     Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue
 }
 
 # ============================================================
-# [27] NVIDIA Low Latency (保留 HDCP — 不碰 NVIDIA app/recording)
-# PowerMizer=max perf, preemption ปิดทุกอย่าง
-# GPU ไม่ downclock, frame ไม่ถูก preempt
+# [25] NVIDIA Low Latency
 # ============================================================
 $Tweak_NvidiaLowLatency = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | Where-Object {
@@ -535,8 +413,7 @@ $Tweak_NvidiaLowLatency = {
 }
 
 # ============================================================
-# [28] NVIDIA Shader + ReBAR
-# ReBAR=CPU access VRAM ทั้งก้อน, Shader Cache=ไม่ recompile
+# [26] NVIDIA Shader + ReBAR
 # ============================================================
 $Tweak_NvidiaShader = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | Where-Object {
@@ -550,8 +427,7 @@ $Tweak_NvidiaShader = {
 }
 
 # ============================================================
-# [29] Exploit Protection
-# ปิด CFG (Control Flow Guard) = ลด overhead ทุก indirect call
+# [27] Exploit Protection
 # ============================================================
 $Tweak_ExploitProtection = {
     Set-ProcessMitigation -System -Disable CFG -ErrorAction SilentlyContinue
@@ -560,9 +436,7 @@ $Tweak_ExploitProtection = {
 }
 
 # ============================================================
-# [30] Windows Defender
-# ปิด real-time + behavior + IOAV + script scanning
-# CPU 3-8% กลับมาใช้เกม
+# [28] Windows Defender
 # ============================================================
 $Tweak_DefenderRealtime = {
     Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
@@ -576,8 +450,7 @@ $Tweak_DefenderRealtime = {
 }
 
 # ============================================================
-# [31] Background Apps
-# ปิด UWP background apps ทั้งหมด
+# [29] Background Apps
 # ============================================================
 $Tweak_BackgroundApps = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f | Out-Null
@@ -585,8 +458,7 @@ $Tweak_BackgroundApps = {
 }
 
 # ============================================================
-# [32] Delivery Optimization
-# ปิด P2P update sharing (ใช้ bandwidth + CPU)
+# [30] Delivery Optimization
 # ============================================================
 $Tweak_DeliveryOptimization = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" /v DODownloadMode /t REG_DWORD /d 0 /f | Out-Null
@@ -596,8 +468,7 @@ $Tweak_DeliveryOptimization = {
 }
 
 # ============================================================
-# [33] Device Power
-# ปิด USB hub idle + NVMe power state
+# [31] Device Power
 # ============================================================
 $Tweak_DevicePower = {
     Get-WmiObject -Class Win32_USBHub -ErrorAction SilentlyContinue | ForEach-Object {
@@ -608,8 +479,7 @@ $Tweak_DevicePower = {
 }
 
 # ============================================================
-# [34] GPU Cache Cleanup
-# ลบ shader cache เก่า (ป้องกัน stutter)
+# [32] GPU Cache Cleanup
 # ============================================================
 $Tweak_GpuCacheCleanup = {
     Remove-Item -Path "$env:LOCALAPPDATA\NVIDIA\DXCache\*" -Recurse -Force -ErrorAction SilentlyContinue
@@ -620,16 +490,14 @@ $Tweak_GpuCacheCleanup = {
 }
 
 # ============================================================
-# [35] MPO Disable
-# ปิด Multi-Plane Overlay (ลด 1-2 frame compositing latency)
+# [33] MPO Disable
 # ============================================================
 $Tweak_MPODisable = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
 }
 
 # ============================================================
-# [36] PCI-E ASPM
-# ปิด Active State Power Management (ไม่ sleep PCI-E link)
+# [34] PCI-E ASPM
 # ============================================================
 $Tweak_PciEAspm = {
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 0 | Out-Null
@@ -640,8 +508,7 @@ $Tweak_PciEAspm = {
 }
 
 # ============================================================
-# [37] Connected Standby
-# ปิด Modern Standby (ใช้ CPU/network ตอน sleep)
+# [35] Connected Standby
 # ============================================================
 $Tweak_ConnectedStandby = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v CsEnabled /t REG_DWORD /d 0 /f | Out-Null
@@ -650,8 +517,7 @@ $Tweak_ConnectedStandby = {
 }
 
 # ============================================================
-# [38] Telemetry Tasks
-# ปิด scheduled tasks ที่เก็บ data + report
+# [36] Telemetry Tasks
 # ============================================================
 $Tweak_TelemetryTasks = {
     $tasks = @(
@@ -678,8 +544,7 @@ $Tweak_TelemetryTasks = {
 }
 
 # ============================================================
-# [39] Windows Ads and Tips
-# ปิด Start menu suggestions, lock screen ads, notification ads
+# [37] Windows Ads and Tips
 # ============================================================
 $Tweak_WindowsAdsTips = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
@@ -700,8 +565,7 @@ $Tweak_WindowsAdsTips = {
 }
 
 # ============================================================
-# [40] Additional Services
-# ปิด WpnService, WaaSMedicSvc, SSDPSRV, CDP, PcaSvc, PhoneSvc
+# [38] Additional Services
 # ============================================================
 $Tweak_AdditionalServices = {
     $extraDisable = @(
@@ -715,16 +579,14 @@ $Tweak_AdditionalServices = {
 }
 
 # ============================================================
-# [41] Overlay Killer (GameBar only)
-# 保留 Steam/Discord/NVIDIA overlay
+# [39] Overlay Killer (GameBar only)
 # ============================================================
 $Tweak_OverlayKiller = {
     reg add "HKCU\Software\Microsoft\GameBar" /v UseNexusForGameBarEnabled /t REG_DWORD /d 0 /f | Out-Null
 }
 
 # ============================================================
-# [42] Network Noise
-# ปิด SMBv1, LLMNR, SSDP, Function Discovery
+# [40] Network Noise
 # ============================================================
 $Tweak_NetworkNoise = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v EnableMulticast /t REG_DWORD /d 0 /f | Out-Null
@@ -738,8 +600,7 @@ $Tweak_NetworkNoise = {
 }
 
 # ============================================================
-# [43] Diagnostic Services
-# ปิด DPS, WdiService, WER
+# [41] Diagnostic Services
 # ============================================================
 $Tweak_DiagnosticServices = {
     $diagList = @('DPS','WdiServiceHost','WdiSystemHost','diagnosticshub.standardcollector.service','diagsvc','TroubleShootingSvc')
@@ -751,8 +612,7 @@ $Tweak_DiagnosticServices = {
 }
 
 # ============================================================
-# [44] System Restore Off
-# ปิด VSS + System Restore (ประหยัด disk I/O + space)
+# [42] System Restore Off
 # ============================================================
 $Tweak_SystemRestoreOff = {
     Disable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
@@ -762,8 +622,7 @@ $Tweak_SystemRestoreOff = {
 }
 
 # ============================================================
-# [45] Additional Services v2
-# ปิด IPv6 transition, WinRM, Media Player sharing
+# [43] Additional Services v2
 # ============================================================
 $Tweak_AdditionalServices2 = {
     $extraDisable2 = @(
@@ -775,8 +634,7 @@ $Tweak_AdditionalServices2 = {
 }
 
 # ============================================================
-# [46] Spotlight and Clipboard
-# ปิด Windows Spotlight, clipboard history, cross-device
+# [44] Spotlight and Clipboard
 # ============================================================
 $Tweak_SpotlightClipboard = {
     reg add "HKCU\Software\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsSpotlightFeatures /t REG_DWORD /d 1 /f | Out-Null
@@ -792,8 +650,7 @@ $Tweak_SpotlightClipboard = {
 }
 
 # ============================================================
-# [47] NVIDIA Telemetry (保留 app/overlay/recording)
-# ปิด NVIDIA crash reports + update check tasks
+# [45] NVIDIA Telemetry
 # ============================================================
 $Tweak_NvidiaTelemetry = {
     $nvTasks = @(
@@ -810,8 +667,7 @@ $Tweak_NvidiaTelemetry = {
 }
 
 # ============================================================
-# [48] News + Interests + Copilot
-# ปิด taskbar news feed + Copilot button
+# [46] News + Interests + Copilot
 # ============================================================
 $Tweak_CopilotRecall = {
     reg add "HKCU\Software\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f | Out-Null
@@ -824,8 +680,7 @@ $Tweak_CopilotRecall = {
 }
 
 # ============================================================
-# [49] Storage Sense + Edge
-# ปิด auto-cleanup, Edge background/prelaunch/sidebar
+# [47] Storage Sense + Edge
 # ============================================================
 $Tweak_StorageEdge = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" /v 01 /t REG_DWORD /d 0 /f | Out-Null
@@ -842,8 +697,7 @@ $Tweak_StorageEdge = {
 }
 
 # ============================================================
-# [50] Boot and Login Speed
-# ปิด lock screen, boot log, status messages
+# [48] Boot and Login Speed
 # ============================================================
 $Tweak_BootLoginSpeed = {
     bcdedit /set bootmenupolicy standard | Out-Null
@@ -854,8 +708,7 @@ $Tweak_BootLoginSpeed = {
 }
 
 # ============================================================
-# [51] Autologger Disable
-# ปิด ETW trace sessions (ไม่แตะ EventLog core)
+# [49] Autologger Disable
 # ============================================================
 $Tweak_AutologgerDisable = {
     $loggers = @(
@@ -875,9 +728,7 @@ $Tweak_AutologgerDisable = {
 }
 
 # ============================================================
-# [52] Pagefile Optimize
-# Fixed size = 50% RAM (ไม่ grow/shrink dynamic)
-# ปิด indexing ทุก drive ยกเว้น C
+# [50] Pagefile Optimize
 # ============================================================
 $Tweak_PagefileOptimize = {
     $cs = Get-WmiObject Win32_ComputerSystem; $cs.AutomaticManagedPagefile = $false; $cs.Put() | Out-Null
@@ -897,8 +748,7 @@ $Tweak_PagefileOptimize = {
 }
 
 # ============================================================
-# [53] SmartScreen + AutoPlay
-# ปิด SmartScreen, autoplay, Windows Script Host
+# [51] SmartScreen + AutoPlay
 # ============================================================
 $Tweak_SmartScreen = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableSmartScreen /t REG_DWORD /d 0 /f | Out-Null
@@ -911,8 +761,7 @@ $Tweak_SmartScreen = {
 }
 
 # ============================================================
-# [54] Scheduled Tasks v2
-# ปิด disk diag, perf track, defrag, Edge/Office telemetry
+# [52] Scheduled Tasks v2
 # ============================================================
 $Tweak_ScheduledTasks2 = {
     $tasks = @(
@@ -933,8 +782,8 @@ $Tweak_ScheduledTasks2 = {
 }
 
 # ============================================================
-# [55] LSO + RSS Queues
-# ปิด Large Send Offload (ให้ NIC จัดการ), RSS = multi-core
+# [53] LSO + RSS Queues
+# FIX: ลบ Jumbo Frames (เสี่ยงทำให้เน็ตพังถ้า switch/router ไม่รองรับ)
 # ============================================================
 $Tweak_LSOandRSS = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
@@ -942,17 +791,17 @@ $Tweak_LSOandRSS = {
         Disable-NetAdapterLso -Name $n -IPv4 -IPv6 -ErrorAction SilentlyContinue
         $maxRss = (Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*NumRssQueues' -ErrorAction SilentlyContinue).RegistryValue
         if ($maxRss) { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*NumRssQueues' -RegistryValue $maxRss -ErrorAction SilentlyContinue }
-        try { $jumbo = Get-NetAdapterAdvancedProperty -Name $n -DisplayName 'Jumbo Packet' -ErrorAction SilentlyContinue; if ($jumbo) { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Jumbo Packet' -DisplayValue '9014 Bytes' -ErrorAction SilentlyContinue } } catch {}
-        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*ReceiveBuffers' -RegistryValue 2048 -ErrorAction SilentlyContinue; Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*TransmitBuffers' -RegistryValue 2048 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*ReceiveBuffers' -RegistryValue 2048 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*TransmitBuffers' -RegistryValue 2048 -ErrorAction SilentlyContinue } catch {}
     }
 }
 
 # ============================================================
-# [56] TCP Window / BDP Tuning
-# Window scaling + connection limits + TIME_WAIT delay
+# [54] TCP Window / BDP Tuning
+# FIX: Tcp1323Opts=1 (window scaling only, no timestamps)
 # ============================================================
 $Tweak_TCPWindowTuning = {
-    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v Tcp1323Opts /t REG_DWORD /d 3 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v Tcp1323Opts /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpWindowSize /t REG_DWORD /d 262144 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxFreeTcbs /t REG_DWORD /d 65536 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxUserPort /t REG_DWORD /d 65534 /f | Out-Null
@@ -963,8 +812,7 @@ $Tweak_TCPWindowTuning = {
 }
 
 # ============================================================
-# [57] WiFi Optimize
-# บังคับ 5GHz, ปิด power save, roaming aggressive
+# [55] WiFi Optimize
 # ============================================================
 $Tweak_WiFiOptimize = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.MediaType -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wi-Fi|Wireless|WiFi|WLAN' } | ForEach-Object {
@@ -981,8 +829,7 @@ $Tweak_WiFiOptimize = {
 }
 
 # ============================================================
-# [58] TCP Congestion
-# Cubic congestion + fast initial RTO + larger ICW
+# [56] TCP Congestion
 # ============================================================
 $Tweak_TCPCongestion = {
     netsh int tcp set supplemental template=Internet congestionprovider=cubic | Out-Null
@@ -994,8 +841,7 @@ $Tweak_TCPCongestion = {
 }
 
 # ============================================================
-# [59] UDP Buffer
-# เพิ่ม UDP send/receive buffer สำหรับ game packets
+# [57] UDP Buffer
 # ============================================================
 $Tweak_UDPBuffer = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DatagramSendBufferLength /t REG_DWORD /d 65536 /f | Out-Null
@@ -1006,14 +852,15 @@ $Tweak_UDPBuffer = {
 }
 
 # ============================================================
-# [60] NIC Flow + RSS Core
-# ปิด packet coalescing, ปิด IPv6, RSS base core=1
+# [58] NIC Flow + RSS Core
+# FIX: RSS BaseProc=2 (core 1 = GPU interrupt, core 2 = NIC)
+# FIX: ปิด IPv6 binding
 # ============================================================
 $Tweak_NICFlowControl = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
         $n = $_.Name
         try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Packet Coalescing' -DisplayValue 'Disabled' -ErrorAction SilentlyContinue } catch {}
-        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*RssBaseProcNumber' -RegistryValue 1 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*RssBaseProcNumber' -RegistryValue 2 -ErrorAction SilentlyContinue } catch {}
         $cores = (Get-WmiObject Win32_Processor).NumberOfLogicalProcessors
         try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*MaxRssProcessors' -RegistryValue $cores -ErrorAction SilentlyContinue } catch {}
         try { Disable-NetAdapterBinding -Name $n -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue } catch {}
@@ -1021,8 +868,7 @@ $Tweak_NICFlowControl = {
 }
 
 # ============================================================
-# [61] QoS + DSCP
-# ปิด QoS bandwidth reserve, DSCP EF = game priority
+# [59] QoS + DSCP
 # ============================================================
 $Tweak_QoS = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v NonBestEffortLimit /t REG_DWORD /d 0 /f | Out-Null
@@ -1030,8 +876,7 @@ $Tweak_QoS = {
 }
 
 # ============================================================
-# [62] NIC Power Deep
-# ปิดทุก NIC power saving (ไม่ downclock/sleep)
+# [60] NIC Power Deep
 # ============================================================
 $Tweak_NICPowerDeep = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
@@ -1049,8 +894,7 @@ $Tweak_NICPowerDeep = {
 }
 
 # ============================================================
-# [63] DNS Cache + Flush
-# Flush ทุก cache, negative cache=0, ปิด NetBIOS
+# [61] DNS Cache + Flush
 # ============================================================
 $Tweak_DNSCache = {
     ipconfig /flushdns | Out-Null; nbtstat -R | Out-Null; nbtstat -RR | Out-Null; arp -d * 2>$null | Out-Null
@@ -1064,8 +908,7 @@ $Tweak_DNSCache = {
 }
 
 # ============================================================
-# [64] TCP KeepAlive + SYN Protection
-# KeepAlive=5min, SYN flood protection, max connections
+# [62] TCP KeepAlive + SYN Protection
 # ============================================================
 $Tweak_TCPKeepAlive = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v KeepAliveTime /t REG_DWORD /d 300000 /f | Out-Null
@@ -1076,9 +919,8 @@ $Tweak_TCPKeepAlive = {
 }
 
 # ============================================================
-# [65] MMCSS Deep Tuning
-# AlwaysOn + NoLazyMode + Latency Sensitive
-# Audio Affinity=core 0-2 (ปล่อย core 3+ ให้เกม)
+# [63] MMCSS Deep Tuning
+# (formerly [65] — replaces the removed [19] Display Post Processing)
 # ============================================================
 $Tweak_MMCSSDeep = {
     $mmcss = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
@@ -1112,9 +954,7 @@ $Tweak_MMCSSDeep = {
 }
 
 # ============================================================
-# [66] NVIDIA Profile
-# Low Latency Ultra + Max Pre-Render=1 + Max Performance
-# 保留 HDCP (NVIDIA app/recording ต้องใช้)
+# [64] NVIDIA Profile
 # ============================================================
 $Tweak_NvidiaProfile = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | Where-Object {
@@ -1135,27 +975,7 @@ $Tweak_NvidiaProfile = {
 }
 
 # ============================================================
-# [67] Ultimate Performance Power Plan
-# Hidden plan = zero C-state, zero parking delay
-# ============================================================
-$Tweak_UltimatePerf = {
-    powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null | Out-Null
-    powercfg /setactive e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null | Out-Null
-    powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null | Out-Null
-    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 | Out-Null
-    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 100 | Out-Null
-    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMINCORES 100 | Out-Null
-    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMAXCORES 100 | Out-Null
-    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFBOOSTMODE 2 | Out-Null
-    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFAUTONOMOUS 0 | Out-Null
-    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR DISTRIBUTEUTILITIES 1 | Out-Null
-    powercfg /setacvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 0 | Out-Null
-    powercfg /setactive SCHEME_CURRENT | Out-Null
-}
-
-# ============================================================
-# [68] USB Power Deep
-# ปิดทุก USB hub/controller idle + root hub suspend
+# [65] USB Power Deep
 # ============================================================
 $Tweak_USBPowerDeep = {
     Get-WmiObject -Class Win32_USBHub -ErrorAction SilentlyContinue | ForEach-Object {
@@ -1171,9 +991,7 @@ $Tweak_USBPowerDeep = {
 }
 
 # ============================================================
-# [69] NTFS Deep
-# NtfsMemoryUsage=2 (เพิ่ม file system cache)
-# PathCache=128, ปิด EFS service
+# [66] NTFS Deep
 # ============================================================
 $Tweak_NTFSDeep = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v NtfsMemoryUsage /t REG_DWORD /d 2 /f | Out-Null
@@ -1185,24 +1003,25 @@ $Tweak_NTFSDeep = {
 }
 
 # ============================================================
-# [70] CPU Scheduling Deep
-# IRQ8 priority, short fixed quantum
-# SSD-only: ปิด prefetch/superfetch
+# [67] CPU Scheduling Deep
+# FIX: ย้าย Prefetcher/Superfetch logic ทั้งหมดมาที่นี่ (single source)
 # ============================================================
 $Tweak_CPUScheduling = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQ8Priority /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32PrioritySeparation /t REG_DWORD /d 38 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v SecondLevelDataCache /t REG_DWORD /d 0 /f | Out-Null
     $hasHDD = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'HDD' }
-    if (-not $hasHDD) {
+    if ($hasHDD) {
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnablePrefetcher /t REG_DWORD /d 3 /f | Out-Null
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
+    } else {
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnablePrefetcher /t REG_DWORD /d 0 /f | Out-Null
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
     }
 }
 
 # ============================================================
-# [71] VBS/HVCI Core Isolation
-# ปิด driver sandboxing (CPU overhead 5-10%)
+# [68] VBS/HVCI Core Isolation
 # ============================================================
 $Tweak_VBSHVCI = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
@@ -1214,8 +1033,7 @@ $Tweak_VBSHVCI = {
 }
 
 # ============================================================
-# [72] NVMe Deep
-# ปิด NVMe power state + ASPM, IRQ affinity=core 1
+# [69] NVMe Deep
 # ============================================================
 $Tweak_NVMeDeep = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\stornvme\Parameters\Device" /v IdlePowerStateEnabled /t REG_DWORD /d 0 /f 2>$null | Out-Null
@@ -1232,9 +1050,7 @@ $Tweak_NVMeDeep = {
 }
 
 # ============================================================
-# [73] LargeSystemCache + IoPageLockLimit
-# >=16GB RAM: ให้ Windows ใช้ RAM เป็น file cache
-# IoPageLockLimit = RAM*0.75 (lock ไว้ไม่ swap)
+# [70] LargeSystemCache + IoPageLockLimit
 # ============================================================
 $Tweak_LargeSystemCache = {
     $ram = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
@@ -1246,8 +1062,7 @@ $Tweak_LargeSystemCache = {
 }
 
 # ============================================================
-# [74] Misc Services
-# ปิด Spooler, RDP, Wallet, Geolocation, Shared Experiences
+# [71] Misc Services
 # ============================================================
 $Tweak_MiscServices = {
     sc.exe stop Spooler 2>$null | Out-Null; sc.exe config Spooler start= disabled 2>$null | Out-Null
@@ -1260,8 +1075,7 @@ $Tweak_MiscServices = {
 }
 
 # ============================================================
-# [75] UWP Background Disable
-# ปิด background ทีละ app (Photos, News, Weather, Xbox, YourPhone...)
+# [72] UWP Background Disable
 # ============================================================
 $Tweak_UWPBackgroundDisable = {
     $uwpDisable = @(
@@ -1284,8 +1098,7 @@ $Tweak_UWPBackgroundDisable = {
 }
 
 # ============================================================
-# [76] ETW Session Disable (保留 EventLog core)
-# ปิดแค่ diagnostic trace sessions
+# [73] ETW Session Disable
 # ============================================================
 $Tweak_ETWDisable = {
     $etwSessions = @('DiagLog','Diagtrack-Listener','WiFiSession','UserNotPresentTraceSession','NtfsLog')
@@ -1293,9 +1106,7 @@ $Tweak_ETWDisable = {
 }
 
 # ============================================================
-# [77] CSRSS Priority
-# Client/Server Runtime Subsystem = จัดการ input + display
-# High priority = input events ถูก process เร็วขึ้น
+# [74] CSRSS Priority
 # ============================================================
 $Tweak_CSRSSPriority = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\csrss.exe\PerfOptions" /v CpuPriorityClass /t REG_DWORD /d 4 /f 2>$null | Out-Null
@@ -1303,8 +1114,7 @@ $Tweak_CSRSSPriority = {
 }
 
 # ============================================================
-# [78] DWM Optimization
-# Desktop Window Manager high priority + ปิด transparency
+# [75] DWM Optimization
 # ============================================================
 $Tweak_DWMOptimize = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\dwm.exe\PerfOptions" /v CpuPriorityClass /t REG_DWORD /d 4 /f 2>$null | Out-Null
@@ -1315,7 +1125,7 @@ $Tweak_DWMOptimize = {
 }
 
 # ============================================================
-# MASTER TABLE — 78 TWEAKS
+# MASTER TABLE — 75 TWEAKS (removed [19] Display Post + [67] PowerPlan)
 # ============================================================
 $AllTweaks = [ordered]@{
     "[01] Kernel + Timer (TSC)"        = $Tweak_KernelTimer
@@ -1336,66 +1146,63 @@ $AllTweaks = [ordered]@{
     "[16] Privacy and Telemetry"       = $Tweak_PrivacyTelemetry
     "[17] Windows Services"            = $Tweak_Services
     "[18] Junk and Log Cleanup"        = $Tweak_JunkCleanup
-    "[19] Display Post Processing"     = $Tweak_MMCSSDisplay
-    "[20] System.ini / Win.ini"        = $Tweak_IniCompat
-    "[21] Interrupt Affinity"          = $Tweak_InterruptAffinity
-    "[22] NIC Advanced"                = $Tweak_NICAdvanced
-    "[23] Hyper-V and VBS"            = $Tweak_HyperV
-    "[24] Timer Resolution Runtime"    = $Tweak_TimerResRuntime
-    "[25] Spectre and Meltdown"        = $Tweak_SpectreMeltdown
-    "[26] Memory Compression"          = $Tweak_MemCompression
-    "[27] NVIDIA Low Latency"          = $Tweak_NvidiaLowLatency
-    "[28] NVIDIA Shader + ReBAR"       = $Tweak_NvidiaShader
-    "[29] Exploit Protection"          = $Tweak_ExploitProtection
-    "[30] Windows Defender"            = $Tweak_DefenderRealtime
-    "[31] Background Apps"             = $Tweak_BackgroundApps
-    "[32] Delivery Optimization"       = $Tweak_DeliveryOptimization
-    "[33] Device Power"                = $Tweak_DevicePower
-    "[34] GPU Cache Cleanup"           = $Tweak_GpuCacheCleanup
-    "[35] MPO Disable"                 = $Tweak_MPODisable
-    "[36] PCI-E ASPM"                  = $Tweak_PciEAspm
-    "[37] Connected Standby"           = $Tweak_ConnectedStandby
-    "[38] Telemetry Tasks"             = $Tweak_TelemetryTasks
-    "[39] Windows Ads and Tips"        = $Tweak_WindowsAdsTips
-    "[40] Additional Services"         = $Tweak_AdditionalServices
-    "[41] Overlay Killer (GameBar)"    = $Tweak_OverlayKiller
-    "[42] Network Noise"               = $Tweak_NetworkNoise
-    "[43] Diagnostic Services"         = $Tweak_DiagnosticServices
-    "[44] System Restore Off"          = $Tweak_SystemRestoreOff
-    "[45] Additional Services v2"      = $Tweak_AdditionalServices2
-    "[46] Spotlight and Clipboard"     = $Tweak_SpotlightClipboard
-    "[47] NVIDIA Telemetry"            = $Tweak_NvidiaTelemetry
-    "[48] News + Copilot Disable"      = $Tweak_CopilotRecall
-    "[49] Storage Sense + Edge"        = $Tweak_StorageEdge
-    "[50] Boot and Login Speed"        = $Tweak_BootLoginSpeed
-    "[51] Autologger Disable"          = $Tweak_AutologgerDisable
-    "[52] Pagefile Optimize"           = $Tweak_PagefileOptimize
-    "[53] SmartScreen and AutoPlay"    = $Tweak_SmartScreen
-    "[54] Scheduled Tasks v2"          = $Tweak_ScheduledTasks2
-    "[55] LSO + RSS Queues"            = $Tweak_LSOandRSS
-    "[56] TCP Window BDP"              = $Tweak_TCPWindowTuning
-    "[57] WiFi Optimize"               = $Tweak_WiFiOptimize
-    "[58] TCP Congestion"              = $Tweak_TCPCongestion
-    "[59] UDP Buffer"                  = $Tweak_UDPBuffer
-    "[60] NIC Flow + RSS Core"         = $Tweak_NICFlowControl
-    "[61] QoS + DSCP"                  = $Tweak_QoS
-    "[62] NIC Power Deep"              = $Tweak_NICPowerDeep
-    "[63] DNS Cache + Flush"           = $Tweak_DNSCache
-    "[64] TCP KeepAlive + SYN"         = $Tweak_TCPKeepAlive
-    "[65] MMCSS Deep Tuning"           = $Tweak_MMCSSDeep
-    "[66] NVIDIA Profile"              = $Tweak_NvidiaProfile
-    "[67] Ultimate Performance"        = $Tweak_UltimatePerf
-    "[68] USB Power Deep"              = $Tweak_USBPowerDeep
-    "[69] NTFS Deep"                   = $Tweak_NTFSDeep
-    "[70] CPU Scheduling Deep"         = $Tweak_CPUScheduling
-    "[71] VBS/HVCI Core Isolation"     = $Tweak_VBSHVCI
-    "[72] NVMe Deep"                   = $Tweak_NVMeDeep
-    "[73] LargeSystemCache + IoPage"   = $Tweak_LargeSystemCache
-    "[74] Misc Services"               = $Tweak_MiscServices
-    "[75] UWP Background Disable"      = $Tweak_UWPBackgroundDisable
-    "[76] ETW Session Disable"         = $Tweak_ETWDisable
-    "[77] CSRSS Priority"              = $Tweak_CSRSSPriority
-    "[78] DWM Optimization"            = $Tweak_DWMOptimize
+    "[19] Interrupt Affinity"          = $Tweak_InterruptAffinity
+    "[20] NIC Advanced"                = $Tweak_NICAdvanced
+    "[21] Hyper-V and VBS"            = $Tweak_HyperV
+    "[22] Timer Resolution Runtime"    = $Tweak_TimerResRuntime
+    "[23] Spectre and Meltdown"        = $Tweak_SpectreMeltdown
+    "[24] Memory Compression"          = $Tweak_MemCompression
+    "[25] NVIDIA Low Latency"          = $Tweak_NvidiaLowLatency
+    "[26] NVIDIA Shader + ReBAR"       = $Tweak_NvidiaShader
+    "[27] Exploit Protection"          = $Tweak_ExploitProtection
+    "[28] Windows Defender"            = $Tweak_DefenderRealtime
+    "[29] Background Apps"             = $Tweak_BackgroundApps
+    "[30] Delivery Optimization"       = $Tweak_DeliveryOptimization
+    "[31] Device Power"                = $Tweak_DevicePower
+    "[32] GPU Cache Cleanup"           = $Tweak_GpuCacheCleanup
+    "[33] MPO Disable"                 = $Tweak_MPODisable
+    "[34] PCI-E ASPM"                  = $Tweak_PciEAspm
+    "[35] Connected Standby"           = $Tweak_ConnectedStandby
+    "[36] Telemetry Tasks"             = $Tweak_TelemetryTasks
+    "[37] Windows Ads and Tips"        = $Tweak_WindowsAdsTips
+    "[38] Additional Services"         = $Tweak_AdditionalServices
+    "[39] Overlay Killer (GameBar)"    = $Tweak_OverlayKiller
+    "[40] Network Noise"               = $Tweak_NetworkNoise
+    "[41] Diagnostic Services"         = $Tweak_DiagnosticServices
+    "[42] System Restore Off"          = $Tweak_SystemRestoreOff
+    "[43] Additional Services v2"      = $Tweak_AdditionalServices2
+    "[44] Spotlight and Clipboard"     = $Tweak_SpotlightClipboard
+    "[45] NVIDIA Telemetry"            = $Tweak_NvidiaTelemetry
+    "[46] News + Copilot Disable"      = $Tweak_CopilotRecall
+    "[47] Storage Sense + Edge"        = $Tweak_StorageEdge
+    "[48] Boot and Login Speed"        = $Tweak_BootLoginSpeed
+    "[49] Autologger Disable"          = $Tweak_AutologgerDisable
+    "[50] Pagefile Optimize"           = $Tweak_PagefileOptimize
+    "[51] SmartScreen and AutoPlay"    = $Tweak_SmartScreen
+    "[52] Scheduled Tasks v2"          = $Tweak_ScheduledTasks2
+    "[53] LSO + RSS Queues"            = $Tweak_LSOandRSS
+    "[54] TCP Window BDP"              = $Tweak_TCPWindowTuning
+    "[55] WiFi Optimize"               = $Tweak_WiFiOptimize
+    "[56] TCP Congestion"              = $Tweak_TCPCongestion
+    "[57] UDP Buffer"                  = $Tweak_UDPBuffer
+    "[58] NIC Flow + RSS Core"         = $Tweak_NICFlowControl
+    "[59] QoS + DSCP"                  = $Tweak_QoS
+    "[60] NIC Power Deep"              = $Tweak_NICPowerDeep
+    "[61] DNS Cache + Flush"           = $Tweak_DNSCache
+    "[62] TCP KeepAlive + SYN"         = $Tweak_TCPKeepAlive
+    "[63] MMCSS Deep Tuning"           = $Tweak_MMCSSDeep
+    "[64] NVIDIA Profile"              = $Tweak_NvidiaProfile
+    "[65] USB Power Deep"              = $Tweak_USBPowerDeep
+    "[66] NTFS Deep"                   = $Tweak_NTFSDeep
+    "[67] CPU Scheduling Deep"         = $Tweak_CPUScheduling
+    "[68] VBS/HVCI Core Isolation"     = $Tweak_VBSHVCI
+    "[69] NVMe Deep"                   = $Tweak_NVMeDeep
+    "[70] LargeSystemCache + IoPage"   = $Tweak_LargeSystemCache
+    "[71] Misc Services"               = $Tweak_MiscServices
+    "[72] UWP Background Disable"      = $Tweak_UWPBackgroundDisable
+    "[73] ETW Session Disable"         = $Tweak_ETWDisable
+    "[74] CSRSS Priority"              = $Tweak_CSRSSPriority
+    "[75] DWM Optimization"            = $Tweak_DWMOptimize
 }
 
 $script:selectedIndex = 0
@@ -1534,7 +1341,7 @@ function Execute-Selection {
         if ($script:errorLog.Count -gt 0) {
             $script:labelControls[0].Text = "> Done - $($script:errorLog.Count) error(s)"
         } else {
-            $script:labelControls[0].Text = "> Done - All 78 tweaks applied"
+            $script:labelControls[0].Text = "> Done - All $($AllTweaks.Count) tweaks applied"
         }
         $script:labelControls[0].Refresh()
         try { [System.Media.SystemSounds]::Beep.Play() } catch {}
