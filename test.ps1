@@ -273,7 +273,21 @@ $Tweak_JunkCleanup = {
 $Tweak_IniCompat = {
     $systemIni = Join-Path $env:windir 'system.ini'
     $winIni = Join-Path $env:windir 'win.ini'
-    $ini = @"
+
+    $marker = "; GOATX_TWEAK_MARKER"
+
+    foreach ($f in @($systemIni, $winIni)) {
+        Copy-Item $f "$f.backup" -Force -ErrorAction SilentlyContinue
+        $content = Get-Content $f -Raw -ErrorAction SilentlyContinue
+        if ($content -and $content.Contains("GOATX_TWEAK_MARKER")) {
+            # ลบ section เก่าออกก่อน แล้วค่อยเขียนใหม่
+            $lines = Get-Content $f | Where-Object { $_ -notmatch 'GOATX_TWEAK_MARKER' }
+            Set-Content $f ($lines -join "`r`n") -Force
+        }
+    }
+
+    $systemIniContent = @"
+$marker
 ; for 16-bit app support
 [386Enh]
 MinTimeSlice=1
@@ -309,12 +323,47 @@ TimeSliceUpdateTickCount=1
 [NonWindowsApp]
 MouseExclusive=1
 "@
-    Copy-Item $systemIni "$systemIni.backup" -Force -ErrorAction SilentlyContinue
-    Copy-Item $winIni "$winIni.backup" -Force -ErrorAction SilentlyContinue
-    Add-Content $systemIni "`r`n$ini"
-    Add-Content $winIni "`r`n$ini"
-}
 
+    $winIniContent = @"
+$marker
+[386Enh]
+MinTimeSlice=1
+AvgTimeSlice=1
+MaxTimeSlice=1
+WinTimeSlice=1,1
+NetAsyncTimeout=0
+SyncTimeDivisor=1
+TimeWindowMinutes=0
+Latency=1
+SampleRate=1
+UseHWTimeStamp=1
+Auto-Detect-CPU=TRUE
+CpuSnooze=0
+MaxBiosPipes=128
+MinBiosPipes=128
+DoubleBuffer=0
+Chunksize=5000000
+LoadTop=0
+SystemReg=0
+FastBlt=1
+
+[drivers]
+wave=mmdrv.dll
+timer=timer.drv
+
+[mci]
+mciwave=mmsystem.dll
+
+[timer]
+TimeSliceUpdateTickCount=1
+
+[NonWindowsApp]
+MouseExclusive=1
+"@
+
+    Add-Content $systemIni "`r`n$systemIniContent"
+    Add-Content $winIni "`r`n$winIniContent"
+}
 $Tweak_InterruptAffinity = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI' -ErrorAction SilentlyContinue | ForEach-Object {
         $desc = (Get-ItemProperty $_.PSPath -Name 'DeviceDesc' -ErrorAction SilentlyContinue).DeviceDesc
@@ -799,21 +848,28 @@ $Tweak_AutologgerDisable = {
 }
 
 $Tweak_PagefileOptimize = {
-    # ตั้ง pagefile ขนาดคงที่ = ไม่ fragment (เฉพาะ drive C)
-    # Disable auto pagefile
     $cs = Get-WmiObject Win32_ComputerSystem
     $cs.AutomaticManagedPagefile = $false
     $cs.Put() | Out-Null
-    # ตั้ง initial = max (ลด fragmentation)
+
+    $ram = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1MB)
+    $size = [math]::Max(4096, [math]::Round($ram * 0.5))
+
     $pagefile = Get-WmiObject Win32_PageFileSetting -Filter "SettingID='pagefile.sys @ C:'"
     if ($pagefile) {
-        $ram = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1MB)
-        $size = [math]::Max(4096, [math]::Round($ram * 0.5))
         $pagefile.InitialSize = $size
         $pagefile.MaximumSize = $size
         $pagefile.Put() | Out-Null
+    } else {
+        # สร้าง pagefile entry ใหม่ถ้ายังไม่มี
+        $newPF = ([WMIClass]"root\cimv2:Win32_PageFileSetting").CreateInstance()
+        $newPF.Name = "C:\pagefile.sys"
+        $newPF.InitialSize = $size
+        $newPF.MaximumSize = $size
+        $newPF.Put() | Out-Null
     }
-    # ปิด Content Indexing บน non-OS drives
+
+    # Content Indexing บน non-OS drives
     Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -and $_.DriveLetter -ne 'C' } | ForEach-Object {
         $drive = $_.DriveLetter + ":"
         $obj = Get-WmiObject -Query "SELECT * FROM Win32_Volume WHERE DriveLetter='$drive'"
@@ -1123,11 +1179,19 @@ function Execute-Selection {
             [System.Windows.Forms.Application]::DoEvents()
             try { & $AllTweaks[$key] } catch {}
         }
-        $script:labelControls[0].Text = "> Done"
+        $script:labelControls[0].Text = "> Done — Restart recommended"
         $script:labelControls[0].Refresh()
-        Start-Sleep -Milliseconds 900
-        $script:isRunning = $false
-        Update-Highlight
+
+        # Timer แทน Sleep — ไม่บล็อก UI
+        $timer = New-Object System.Windows.Forms.Timer
+        $timer.Interval = 1500
+        $timer.Add_Tick({
+            $timer.Stop()
+            $timer.Dispose()
+            $script:isRunning = $false
+            Update-Highlight
+        })
+        $timer.Start()
     }
     else {
         $form.Close()
@@ -1147,10 +1211,7 @@ $script:KeyHandler = {
             $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount
             Update-Highlight; $e.Handled = $true
         }
-        'Return' {
-            $e.Handled = $true; $e.SuppressKeyPress = $true
-            Execute-Selection
-        }
+        # 'Return' ลบออก — AcceptButton จัดการแล้ว
     }
 }
 
@@ -1178,3 +1239,19 @@ $form.Add_Shown({ $panel.Focus() })
 Update-Highlight
 
 [System.Windows.Forms.Application]::Run($form)
+
+$script:errorLog = @()
+
+# ใน loop:
+try {
+    & $AllTweaks[$key]
+} catch {
+    $script:errorLog += "$key : $($_.Exception.Message)"
+}
+
+# หลัง Done:
+if ($script:errorLog.Count -gt 0) {
+    $script:labelControls[0].Text = "> Done ($($script:errorLog.Count) errors)"
+} else {
+    $script:labelControls[0].Text = "> Done — All OK"
+}
