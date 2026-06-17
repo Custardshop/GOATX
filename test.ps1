@@ -2,6 +2,7 @@
 ============================================================
   Windows Performance Tweaks - GUI (WinForms, terminal look)
   แก้ไข: Title+Subtitle gradient paint, Options เป็น Label สี match gradient
+  v3: fixed error logging position, IniCompat re-run safe
 ============================================================
 #>
 
@@ -272,21 +273,29 @@ $Tweak_JunkCleanup = {
 
 $Tweak_IniCompat = {
     $systemIni = Join-Path $env:windir 'system.ini'
-    $winIni = Join-Path $env:windir 'win.ini'
-
-    $marker = "; GOATX_TWEAK_MARKER"
+    $winIni    = Join-Path $env:windir 'win.ini'
+    $marker    = "; GOATX_TWEAK_MARKER"
 
     foreach ($f in @($systemIni, $winIni)) {
         Copy-Item $f "$f.backup" -Force -ErrorAction SilentlyContinue
-        $content = Get-Content $f -Raw -ErrorAction SilentlyContinue
-        if ($content -and $content.Contains("GOATX_TWEAK_MARKER")) {
-            # ลบ section เก่าออกก่อน แล้วค่อยเขียนใหม่
-            $lines = Get-Content $f | Where-Object { $_ -notmatch 'GOATX_TWEAK_MARKER' }
-            Set-Content $f ($lines -join "`r`n") -Force
+        $content = Get-Content $f -ErrorAction SilentlyContinue
+        if ($content) {
+            $markerIdx = -1
+            for ($j = 0; $j -lt $content.Count; $j++) {
+                if ($content[$j] -match 'GOATX_TWEAK_MARKER') {
+                    $markerIdx = $j
+                    break
+                }
+            }
+            if ($markerIdx -ge 0) {
+                # ตัดทุกอย่างตั้งแต่ marker ลงไป (ป้องกันเนื้อหาซ้ำ)
+                $trimmed = $content[0..($markerIdx - 1)]
+                Set-Content $f ($trimmed -join "`r`n") -Force
+            }
         }
     }
 
-    $systemIniContent = @"
+    $tweakBlock = @"
 $marker
 ; for 16-bit app support
 [386Enh]
@@ -324,46 +333,10 @@ TimeSliceUpdateTickCount=1
 MouseExclusive=1
 "@
 
-    $winIniContent = @"
-$marker
-[386Enh]
-MinTimeSlice=1
-AvgTimeSlice=1
-MaxTimeSlice=1
-WinTimeSlice=1,1
-NetAsyncTimeout=0
-SyncTimeDivisor=1
-TimeWindowMinutes=0
-Latency=1
-SampleRate=1
-UseHWTimeStamp=1
-Auto-Detect-CPU=TRUE
-CpuSnooze=0
-MaxBiosPipes=128
-MinBiosPipes=128
-DoubleBuffer=0
-Chunksize=5000000
-LoadTop=0
-SystemReg=0
-FastBlt=1
-
-[drivers]
-wave=mmdrv.dll
-timer=timer.drv
-
-[mci]
-mciwave=mmsystem.dll
-
-[timer]
-TimeSliceUpdateTickCount=1
-
-[NonWindowsApp]
-MouseExclusive=1
-"@
-
-    Add-Content $systemIni "`r`n$systemIniContent"
-    Add-Content $winIni "`r`n$winIniContent"
+    Add-Content $systemIni "`r`n$tweakBlock"
+    Add-Content $winIni    "`r`n$tweakBlock"
 }
+
 $Tweak_InterruptAffinity = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI' -ErrorAction SilentlyContinue | ForEach-Object {
         $desc = (Get-ItemProperty $_.PSPath -Name 'DeviceDesc' -ErrorAction SilentlyContinue).DeviceDesc
@@ -660,7 +633,7 @@ Add-Type -TypeDefinition "using System;using System.Runtime.InteropServices;publ
 }
 
 # ============================================================
-# --- Block 42–48 (ใหม่) ---
+# --- Block 42-55 ---
 # ============================================================
 
 $Tweak_OverlayKiller = {
@@ -861,9 +834,8 @@ $Tweak_PagefileOptimize = {
         $pagefile.MaximumSize = $size
         $pagefile.Put() | Out-Null
     } else {
-        # สร้าง pagefile entry ใหม่ถ้ายังไม่มี
         $newPF = ([WMIClass]"root\cimv2:Win32_PageFileSetting").CreateInstance()
-        $newPF.Name = "C:\pagefile.sys"
+        $newPF.Name        = "C:\pagefile.sys"
         $newPF.InitialSize = $size
         $newPF.MaximumSize = $size
         $newPF.Put() | Out-Null
@@ -881,14 +853,14 @@ $Tweak_PagefileOptimize = {
 }
 
 $Tweak_SmartScreen = {
-    # ปิด SmartScreen (reduces disk I/O + network check on every exe)
+    # ปิด SmartScreen
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableSmartScreen /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" /v SmartScreenEnabled /t REG_SZ /d Off /f | Out-Null
     # ปิด Phishing Filter
     reg add "HKCU\Software\Microsoft\Internet Explorer\PhishingFilter" /v EnabledV9 /t REG_DWORD /d 0 /f | Out-Null
     # ปิด Cloud-based protection
     Set-MpPreference -PUAProtection 0 -ErrorAction SilentlyContinue
-    # ปิด Windows Script Host (ป้องกัน malware scripts + ลด overhead)
+    # ปิด Windows Script Host
     reg add "HKLM\SOFTWARE\Microsoft\Windows Script Host\Settings" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
     # ปิด AutoPlay
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers" /v DisableAutoplay /t REG_DWORD /d 1 /f | Out-Null
@@ -997,6 +969,7 @@ $script:selectedIndex = 0
 $script:isRunning     = $false
 $script:optionCount   = 2
 $script:labelControls = @()
+$script:errorLog      = @()
 $script:options = @(
     @{ Label = "[1] High"; Action = "high" }
     @{ Label = "[2] Exit"; Action = "exit" }
@@ -1169,17 +1142,26 @@ function Execute-Selection {
     $action = $script:options[$script:selectedIndex].Action
     if ($action -eq "high") {
         $script:isRunning = $true
+        $script:errorLog  = @()
         $total = $AllTweaks.Count
-        $i = 0
+        $step  = 0
         foreach ($key in $AllTweaks.Keys) {
-            $i++
-            $script:labelControls[0].Text      = "> Running ($i/$total)..."
+            $step++
+            $script:labelControls[0].Text      = "> Running ($step/$total)..."
             $script:labelControls[0].ForeColor = $clrOptHi
             $script:labelControls[0].Refresh()
             [System.Windows.Forms.Application]::DoEvents()
-            try { & $AllTweaks[$key] } catch {}
+            try {
+                & $AllTweaks[$key]
+            } catch {
+                $script:errorLog += "$key : $($_.Exception.Message)"
+            }
         }
-        $script:labelControls[0].Text = "> Done — Restart recommended"
+        if ($script:errorLog.Count -gt 0) {
+            $script:labelControls[0].Text = "> Done — $($script:errorLog.Count) error(s)"
+        } else {
+            $script:labelControls[0].Text = "> Done — All 55 tweaks applied"
+        }
         $script:labelControls[0].Refresh()
 
         # Timer แทน Sleep — ไม่บล็อก UI
@@ -1211,7 +1193,6 @@ $script:KeyHandler = {
             $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount
             Update-Highlight; $e.Handled = $true
         }
-        # 'Return' ลบออก — AcceptButton จัดการแล้ว
     }
 }
 
@@ -1239,19 +1220,3 @@ $form.Add_Shown({ $panel.Focus() })
 Update-Highlight
 
 [System.Windows.Forms.Application]::Run($form)
-
-$script:errorLog = @()
-
-# ใน loop:
-try {
-    & $AllTweaks[$key]
-} catch {
-    $script:errorLog += "$key : $($_.Exception.Message)"
-}
-
-# หลัง Done:
-if ($script:errorLog.Count -gt 0) {
-    $script:labelControls[0].Text = "> Done ($($script:errorLog.Count) errors)"
-} else {
-    $script:labelControls[0].Text = "> Done — All OK"
-}
