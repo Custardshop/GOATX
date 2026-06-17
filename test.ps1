@@ -69,8 +69,15 @@ $Tweak_ProcessPriority = {
 
 $Tweak_IrqMsiMode = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI' -ErrorAction SilentlyContinue | ForEach-Object {
-        $p = ($_.PSPath + '\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties')
-        if (Test-Path $p) { Set-ItemProperty -Path $p -Name MSISupported -Value 1 -Type DWord -Force }
+        $msiPath = ($_.PSPath + '\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties')
+        if (Test-Path $msiPath) {
+            Set-ItemProperty -Path $msiPath -Name MSISupported -Value 1 -Type DWord -Force
+            $affinityPath = ($_.PSPath + '\Device Parameters\Interrupt Management\Affinity Policy')
+            if (-not (Test-Path $affinityPath)) {
+                New-Item -Path $affinityPath -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+            Set-ItemProperty -Path $affinityPath -Name DevicePriority -Value 3 -Type DWord -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -307,6 +314,100 @@ MouseExclusive=1
     Add-Content $winIni "`r`n$ini"
 }
 
+$Tweak_InterruptAffinity = {
+    Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI' -ErrorAction SilentlyContinue | ForEach-Object {
+        $desc = (Get-ItemProperty $_.PSPath -Name 'DeviceDesc' -ErrorAction SilentlyContinue).DeviceDesc
+        $hwid = (Get-ItemProperty $_.PSPath -Name 'HardwareID' -ErrorAction SilentlyContinue).HardwareID
+        $affPath = ($_.PSPath + '\Device Parameters\Interrupt Management\Affinity Policy')
+        if (-not (Test-Path $affPath)) {
+            New-Item -Path $affPath -Force -ErrorAction SilentlyContinue | Out-Null
+        }
+        # GPU → Core 1 (binary 0x02)
+        if ($hwid -and ($hwid[0] -match 'VEN_10DE' -or $hwid[0] -match 'VEN_1002')) {
+            Set-ItemProperty -Path $affPath -Name 'DevicePolicy' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $affPath -Name 'AssignmentSetOverride' -Value 0x02 -Type DWord -Force -ErrorAction SilentlyContinue
+        }
+        # NIC → Core 2 (binary 0x04)
+        if ($desc -match 'Ethernet|Network|LAN|Intel.*Connection' -or ($hwid -and ($hwid[0] -match 'VEN_8086.*DEV_15' -or $hwid[0] -match 'VEN_10EC'))) {
+            Set-ItemProperty -Path $affPath -Name 'DevicePolicy' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $affPath -Name 'AssignmentSetOverride' -Value 0x04 -Type DWord -Force -ErrorAction SilentlyContinue
+        }
+        # USB xHCI → Core 3 (binary 0x08)
+        if ($desc -match 'USB|xHCI|Host Controller') {
+            Set-ItemProperty -Path $affPath -Name 'DevicePolicy' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $affPath -Name 'AssignmentSetOverride' -Value 0x08 -Type DWord -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+$Tweak_NICAdvanced = {
+    Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
+        $n = $_.Name
+        Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*InterruptModeration' -RegistryValue 0 -ErrorAction SilentlyContinue
+        Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Flow Control' -DisplayValue 'Disabled' -ErrorAction SilentlyContinue
+        Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Energy Efficient Ethernet' -DisplayValue 'Disabled' -ErrorAction SilentlyContinue
+        Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Green Ethernet' -DisplayValue 'Disabled' -ErrorAction SilentlyContinue
+        Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Receive Buffers' -DisplayValue '2048' -ErrorAction SilentlyContinue
+        Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Transmit Buffers' -DisplayValue '2048' -ErrorAction SilentlyContinue
+        Disable-NetAdapterChecksumOffload -Name $n -ErrorAction SilentlyContinue
+        Disable-NetAdapterRsc -Name $n -ErrorAction SilentlyContinue
+        Set-NetAdapterPowerManagement -Name $n -WakeOnMagicPacket Disabled -WakeOnPattern Disabled -ErrorAction SilentlyContinue
+    }
+}
+
+$Tweak_HyperV = {
+    dism /Online /Disable-Feature /FeatureName:Microsoft-Hyper-V-All /NoRestart 2>$null | Out-Null
+    bcdedit /set hypervisorlaunchtype off | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard" /v EnableVirtualizationBasedSecurity /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\LSA" /v LsaCfgFlags /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\KernelShadowStacks" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+}
+
+$Tweak_TimerResRuntime = {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class WinTimer {
+    [DllImport("ntdll.dll")]
+    public static extern uint NtSetTimerResolution(uint DesiredResolution, bool SetResolution, out uint CurrentResolution);
+    [DllImport("ntdll.dll")]
+    public static extern uint NtQueryTimerResolution(out uint MinimumResolution, out uint MaximumResolution, out uint CurrentResolution);
+}
+"@ -ErrorAction SilentlyContinue
+    $min = 0; $max = 0; $cur = 0
+    [WinTimer]::NtQueryTimerResolution([ref]$min, [ref]$max, [ref]$cur) | Out-Null
+    [WinTimer]::NtSetTimerResolution($max, $true, [ref]$cur) | Out-Null
+
+    $helperPath = "$env:SystemRoot\System32\GOATX_TimerRes.ps1"
+    @'
+Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class W{[DllImport("ntdll.dll")]public static extern uint NtSetTimerResolution(uint d,bool s,out uint c);}'
+$c=0;[W]::NtSetTimerResolution(5000,$true,[ref]$c)
+while($true){Start-Sleep -Seconds 120}
+'@ | Out-File $helperPath -Encoding Unicode -Force
+    schtasks /Create /TN "GOATX_TimerResolution" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$helperPath`"" /SC ONLOGON /RL HIGHEST /F 2>$null | Out-Null
+}
+
+$Tweak_SpectreMeltdown = {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v FeatureSettingsOverride /t REG_DWORD /d 3 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v FeatureSettingsOverrideMask /t REG_DWORD /d 3 /f | Out-Null
+}
+
+$Tweak_MemCompression = {
+    Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue
+}
+
+$Tweak_MMCSSDisplay = {
+    $base = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Display Post Processing"
+    reg add "$base" /v "GPU Priority" /t REG_DWORD /d 31 /f | Out-Null
+    reg add "$base" /v Priority /t REG_DWORD /d 8 /f | Out-Null
+    reg add "$base" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
+    reg add "$base" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
+    reg add "$base" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
+    reg add "$base" /v "Background Only" /t REG_SZ /d False /f | Out-Null
+    reg add "$base" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
+}
+
 # ============================================================
 # --- 3. รายการปุ่ม ---
 # ============================================================
@@ -316,7 +417,7 @@ $AllTweaks = [ordered]@{
     "[02] Timer Resolution"            = $Tweak_TimerResolution
     "[03] Process Priority"            = $Tweak_ProcessPriority
     "[04] IRQ MSI Mode"                = $Tweak_IrqMsiMode
-    "[05] Memory Management"          = $Tweak_MemoryManagement
+    "[05] Memory Management"           = $Tweak_MemoryManagement
     "[06] Storage Optimizations"       = $Tweak_Storage
     "[07] Input and USB"               = $Tweak_InputUSB
     "[08] Nagle Algorithm"             = $Tweak_Nagle
@@ -330,7 +431,14 @@ $AllTweaks = [ordered]@{
     "[16] Privacy and Telemetry"       = $Tweak_PrivacyTelemetry
     "[17] Windows Services"            = $Tweak_Services
     "[18] Junk and Log Cleanup"        = $Tweak_JunkCleanup
+    "[19] Display Post Processing"     = $Tweak_MMCSSDisplay
     "[20] System.ini / Win.ini Compat" = $Tweak_IniCompat
+    "[21] Interrupt Affinity"          = $Tweak_InterruptAffinity
+    "[22] NIC Advanced"                = $Tweak_NICAdvanced
+    "[23] Hyper-V and VBS"            = $Tweak_HyperV
+    "[24] Timer Resolution (Runtime)"  = $Tweak_TimerResRuntime
+    "[25] Spectre and Meltdown"        = $Tweak_SpectreMeltdown
+    "[26] Memory Compression"          = $Tweak_MemCompression
 }
 
 # ============================================================
