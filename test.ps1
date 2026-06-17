@@ -25,7 +25,8 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # ============================================================
-# FIX #1: ลบ nospeculationcontrol (ไม่มีอยู่จริงใน bcdedit)
+# [01] Kernel and HPET
+# FIX: ลบ nospeculationcontrol (ไม่มีอยู่จริงใน bcdedit)
 # ============================================================
 $Tweak_KernelHPET = {
     bcdedit /set useplatformclock no | Out-Null
@@ -37,10 +38,16 @@ $Tweak_KernelHPET = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v DisablePagingExecutive /t REG_DWORD /d 1 /f | Out-Null
 }
 
+# ============================================================
+# [02] Timer Resolution
+# ============================================================
 $Tweak_TimerResolution = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v GlobalTimerResolutionRequests /t REG_DWORD /d 1 /f | Out-Null
 }
 
+# ============================================================
+# [03] Process Priority
+# ============================================================
 $Tweak_ProcessPriority = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32PrioritySeparation /t REG_DWORD /d 42 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control" /v SvcHostSplitThresholdInKB /t REG_DWORD /d 33554432 /f | Out-Null
@@ -57,6 +64,9 @@ $Tweak_ProcessPriority = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\501a4d13-42af-4429-9fd1-a8218c268e20\ee12f2c1-98bb-455b-9e09-ae4c1e16cb45" /v Attributes /t REG_DWORD /d 2 /f | Out-Null
 }
 
+# ============================================================
+# [04] IRQ MSI Mode
+# ============================================================
 $Tweak_IrqMsiMode = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI' -ErrorAction SilentlyContinue | ForEach-Object {
         $msiPath = ($_.PSPath + '\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties')
@@ -71,6 +81,9 @@ $Tweak_IrqMsiMode = {
     }
 }
 
+# ============================================================
+# [05] Memory Management
+# ============================================================
 $Tweak_MemoryManagement = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v SystemCacheDirtyPageThreshold /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v ClearPageFileAtShutdown /t REG_DWORD /d 0 /f | Out-Null
@@ -82,6 +95,9 @@ $Tweak_MemoryManagement = {
     reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v OneDrive /f 2>$null | Out-Null
 }
 
+# ============================================================
+# [06] Storage Optimizations
+# ============================================================
 $Tweak_Storage = {
     fsutil behavior set disable8dot3 1 | Out-Null
     fsutil behavior set disablelastaccess 1 | Out-Null
@@ -91,6 +107,9 @@ $Tweak_Storage = {
     }
 }
 
+# ============================================================
+# [07] Input and USB
+# ============================================================
 $Tweak_InputUSB = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\mouclass\Parameters" /v MouseDataQueueSize /t REG_DWORD /d 16 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\kbdclass\Parameters" /v KeyboardDataQueueSize /t REG_DWORD /d 16 /f | Out-Null
@@ -108,6 +127,9 @@ $Tweak_InputUSB = {
     reg add "HKCU\Control Panel\Accessibility\MouseKeys" /v Flags /t REG_SZ /d 0 /f | Out-Null
 }
 
+# ============================================================
+# [08] Nagle Algorithm
+# ============================================================
 $Tweak_Nagle = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces' -ErrorAction SilentlyContinue | ForEach-Object {
         Set-ItemProperty -Path $_.PSPath -Name TcpAckFrequency -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
@@ -116,6 +138,9 @@ $Tweak_Nagle = {
     }
 }
 
+# ============================================================
+# [09] Visual Effects
+# ============================================================
 $Tweak_VisualEffects = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f | Out-Null
     reg add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f | Out-Null
@@ -125,6 +150,9 @@ $Tweak_VisualEffects = {
     reg add "HKCU\Control Panel\Desktop" /v DragFullWindows /t REG_SZ /d 0 /f | Out-Null
 }
 
+# ============================================================
+# [10] Game Bar and DVR
+# ============================================================
 $Tweak_GameBarDVR = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR" /v AppCaptureEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\System\GameConfigStore" /v GameDVR_Enabled /t REG_DWORD /d 0 /f | Out-Null
@@ -139,6 +167,9 @@ $Tweak_GameBarDVR = {
     reg add "HKLM\SOFTWARE\Microsoft\DirectX\GraphicsSettings" /v HwSchMode /t REG_DWORD /d 2 /f | Out-Null
 }
 
+# ============================================================
+# [11] Processor Power
+# ============================================================
 $Tweak_ProcessorPower = {
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 | Out-Null
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 100 | Out-Null
@@ -147,6 +178,9 @@ $Tweak_ProcessorPower = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d 0 /f | Out-Null
 }
 
+# ============================================================
+# [12] CPU Core Parking
+# ============================================================
 $Tweak_CoreParking = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\54533251-82be-4824-96c1-47b60b740d00\0cc5b647-c1df-4637-891a-dec35c318583" /v ValueMin /t REG_DWORD /d 0 /f | Out-Null
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMINCORES 100 | Out-Null
@@ -157,7 +191,8 @@ $Tweak_CoreParking = {
 }
 
 # ============================================================
-# FIX #2: TdrLevel เปลี่ยนจาก 0 เป็น 2 (GPU recover ได้)
+# [13] GPU and Display
+# FIX: TdrLevel 0 -> 2 (GPU recover ได้)
 # ============================================================
 $Tweak_GpuDisplay = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 2 /f | Out-Null
@@ -165,6 +200,9 @@ $Tweak_GpuDisplay = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrDelay /t REG_DWORD /d 60 /f | Out-Null
 }
 
+# ============================================================
+# [14] Audio Latency
+# ============================================================
 $Tweak_AudioLatency = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "Background Only" /t REG_SZ /d False /f | Out-Null
@@ -176,7 +214,8 @@ $Tweak_AudioLatency = {
 }
 
 # ============================================================
-# FIX #6: เอา winsock reset กับ ip reset ออก (เน็ตหลุดต้อง reboot)
+# [15] Network and DNS
+# FIX: เอา winsock reset กับ ip reset ออก (เน็ตหลุดต้อง reboot)
 # ============================================================
 $Tweak_NetworkDNS = {
     netsh int tcp set global rss=enabled | Out-Null
@@ -220,6 +259,9 @@ $Tweak_NetworkDNS = {
     ipconfig /flushdns | Out-Null
 }
 
+# ============================================================
+# [16] Privacy and Telemetry
+# ============================================================
 $Tweak_PrivacyTelemetry = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
@@ -236,6 +278,9 @@ $Tweak_PrivacyTelemetry = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" /v DisableLocation /t REG_DWORD /d 1 /f | Out-Null
 }
 
+# ============================================================
+# [17] Windows Services
+# ============================================================
 $Tweak_Services = {
     $disableList = @('DiagTrack','MapsBroker','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','Fax','RetailDemo','RemoteRegistry','WerSvc')
     foreach ($s in $disableList) {
@@ -250,7 +295,8 @@ $Tweak_Services = {
 }
 
 # ============================================================
-# FIX #4: SoftwareDistribution ลบแค่ contents ไม่ใช่ทั้ง folder
+# [18] Junk and Log Cleanup
+# FIX: SoftwareDistribution ลบแค่ contents ไม่ใช่ทั้ง folder
 # ============================================================
 $Tweak_JunkCleanup = {
     Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
@@ -267,7 +313,22 @@ $Tweak_JunkCleanup = {
 }
 
 # ============================================================
-# FIX #5: backup เฉพาะตอนยังไม่มี backup (ไม่ทับต้นฉบับ)
+# [19] Display Post Processing
+# ============================================================
+$Tweak_MMCSSDisplay = {
+    $base = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Display Post Processing"
+    reg add "$base" /v "GPU Priority" /t REG_DWORD /d 31 /f | Out-Null
+    reg add "$base" /v Priority /t REG_DWORD /d 8 /f | Out-Null
+    reg add "$base" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
+    reg add "$base" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
+    reg add "$base" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
+    reg add "$base" /v "Background Only" /t REG_SZ /d False /f | Out-Null
+    reg add "$base" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
+}
+
+# ============================================================
+# [20] System.ini / Win.ini Compat
+# FIX: backup เฉพาะตอนยังไม่มี backup (ไม่ทับต้นฉบับ)
 # ============================================================
 $Tweak_IniCompat = {
     $systemIni = Join-Path $env:windir 'system.ini'
@@ -336,6 +397,9 @@ MouseExclusive=1
     Add-Content $winIni    "`r`n$tweakBlock"
 }
 
+# ============================================================
+# [21] Interrupt Affinity
+# ============================================================
 $Tweak_InterruptAffinity = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI' -ErrorAction SilentlyContinue | ForEach-Object {
         $desc = (Get-ItemProperty $_.PSPath -Name 'DeviceDesc' -ErrorAction SilentlyContinue).DeviceDesc
@@ -360,7 +424,8 @@ $Tweak_InterruptAffinity = {
 }
 
 # ============================================================
-# FIX #7: เอา Disable-NetAdapterChecksumOffload ออก (CPU load เปล่าๆ)
+# [22] NIC Advanced
+# FIX: เอา Disable-NetAdapterChecksumOffload ออก (CPU load เปล่าๆ)
 # ============================================================
 $Tweak_NICAdvanced = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
@@ -376,6 +441,9 @@ $Tweak_NICAdvanced = {
     }
 }
 
+# ============================================================
+# [23] Hyper-V and VBS
+# ============================================================
 $Tweak_HyperV = {
     dism /Online /Disable-Feature /FeatureName:Microsoft-Hyper-V-All /NoRestart 2>$null | Out-Null
     bcdedit /set hypervisorlaunchtype off | Out-Null
@@ -385,6 +453,9 @@ $Tweak_HyperV = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\KernelShadowStacks" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
 }
 
+# ============================================================
+# [24] Timer Resolution (Runtime)
+# ============================================================
 $Tweak_TimerResRuntime = {
     Add-Type -TypeDefinition @"
 using System;
@@ -409,26 +480,24 @@ while($true){Start-Sleep -Seconds 120}
     schtasks /Create /TN "GOATX_TimerResolution" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$helperPath`"" /SC ONLOGON /RL HIGHEST /F 2>$null | Out-Null
 }
 
+# ============================================================
+# [25] Spectre and Meltdown
+# ============================================================
 $Tweak_SpectreMeltdown = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v FeatureSettingsOverride /t REG_DWORD /d 3 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v FeatureSettingsOverrideMask /t REG_DWORD /d 3 /f | Out-Null
 }
 
+# ============================================================
+# [26] Memory Compression
+# ============================================================
 $Tweak_MemCompression = {
     Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue
 }
 
-$Tweak_MMCSSDisplay = {
-    $base = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Display Post Processing"
-    reg add "$base" /v "GPU Priority" /t REG_DWORD /d 31 /f | Out-Null
-    reg add "$base" /v Priority /t REG_DWORD /d 8 /f | Out-Null
-    reg add "$base" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
-    reg add "$base" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
-    reg add "$base" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
-    reg add "$base" /v "Background Only" /t REG_SZ /d False /f | Out-Null
-    reg add "$base" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
-}
-
+# ============================================================
+# [27] NVIDIA Low Latency
+# ============================================================
 $Tweak_NvidiaLowLatency = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | Where-Object {
         (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -ErrorAction SilentlyContinue).DriverDesc -match 'NVIDIA'
@@ -451,6 +520,9 @@ $Tweak_NvidiaLowLatency = {
     }
 }
 
+# ============================================================
+# [28] NVIDIA Shader + ReBAR
+# ============================================================
 $Tweak_NvidiaShader = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | Where-Object {
         (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -ErrorAction SilentlyContinue).DriverDesc -match 'NVIDIA'
@@ -462,12 +534,18 @@ $Tweak_NvidiaShader = {
     }
 }
 
+# ============================================================
+# [29] Exploit Protection CFG
+# ============================================================
 $Tweak_ExploitProtection = {
     Set-ProcessMitigation -System -Disable CFG -ErrorAction SilentlyContinue
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v DisableExceptionChainValidation /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v MoveImages /t REG_DWORD /d 0 /f | Out-Null
 }
 
+# ============================================================
+# [30] Windows Defender
+# ============================================================
 $Tweak_DefenderRealtime = {
     Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
     Set-MpPreference -DisableBehaviorMonitoring $true -ErrorAction SilentlyContinue
@@ -479,11 +557,17 @@ $Tweak_DefenderRealtime = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v DisableRealtimeMonitoring /t REG_DWORD /d 1 /f | Out-Null
 }
 
+# ============================================================
+# [31] Background Apps
+# ============================================================
 $Tweak_BackgroundApps = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" /v LetAppsRunInBackground /t REG_DWORD /d 2 /f | Out-Null
 }
 
+# ============================================================
+# [32] Delivery Optimization
+# ============================================================
 $Tweak_DeliveryOptimization = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization" /v DODownloadMode /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" /v DODownloadMode /t REG_DWORD /d 0 /f | Out-Null
@@ -491,6 +575,9 @@ $Tweak_DeliveryOptimization = {
     sc.exe config DoSvc start= disabled 2>$null | Out-Null
 }
 
+# ============================================================
+# [33] Device Power Management
+# ============================================================
 $Tweak_DevicePower = {
     Get-WmiObject -Class Win32_USBHub -ErrorAction SilentlyContinue | ForEach-Object {
         $pnpId = $_.PNPDeviceID
@@ -502,6 +589,9 @@ $Tweak_DevicePower = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\stornvme\Parameters\Device" /v IdlePowerStateEnabled /t REG_DWORD /d 0 /f 2>$null | Out-Null
 }
 
+# ============================================================
+# [34] GPU Cache Cleanup
+# ============================================================
 $Tweak_GpuCacheCleanup = {
     Remove-Item -Path "$env:LOCALAPPDATA\NVIDIA\DXCache\*" -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$env:LOCALAPPDATA\NVIDIA\GLCache\*" -Recurse -Force -ErrorAction SilentlyContinue
@@ -510,10 +600,16 @@ $Tweak_GpuCacheCleanup = {
     Remove-Item -Path "$env:WINDIR\SoftwareDistribution\DeliveryOptimization\*" -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# ============================================================
+# [35] MPO Disable
+# ============================================================
 $Tweak_MPODisable = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
 }
 
+# ============================================================
+# [36] PCI-E ASPM
+# ============================================================
 $Tweak_PciEAspm = {
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 0 | Out-Null
     powercfg /setactive SCHEME_CURRENT | Out-Null
@@ -522,12 +618,18 @@ $Tweak_PciEAspm = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\stornvme\Parameters\Device" /v NvmeDisableASPM /t REG_DWORD /d 1 /f 2>$null | Out-Null
 }
 
+# ============================================================
+# [37] Connected Standby
+# ============================================================
 $Tweak_ConnectedStandby = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v CsEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v PlatformAoAcOverride /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v AwayModeEnabled /t REG_DWORD /d 0 /f | Out-Null
 }
 
+# ============================================================
+# [38] Telemetry Tasks
+# ============================================================
 $Tweak_TelemetryTasks = {
     $tasks = @(
         '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser'
@@ -554,6 +656,9 @@ $Tweak_TelemetryTasks = {
     }
 }
 
+# ============================================================
+# [39] Windows Ads and Tips
+# ============================================================
 $Tweak_WindowsAdsTips = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SoftLandingEnabled /t REG_DWORD /d 0 /f | Out-Null
@@ -573,7 +678,8 @@ $Tweak_WindowsAdsTips = {
 }
 
 # ============================================================
-# FIX #8a: Spooler กับ WbioSrvc เอาออก (พิมพ์/Hello พัง)
+# [40] Additional Services
+# FIX: Spooler กับ WbioSrvc เอาออก (พิมพ์/Hello พัง)
 # ============================================================
 $Tweak_AdditionalServices = {
     $extraDisable = @(
@@ -608,6 +714,9 @@ $Tweak_AdditionalServices = {
     }
 }
 
+# ============================================================
+# [41] Overlay Killer
+# ============================================================
 $Tweak_OverlayKiller = {
     reg add "HKCU\SOFTWARE\Valve\Steam" /v EnableGameOverlay /t REG_SZ /d 0 /f 2>$null | Out-Null
     reg add "HKCU\SOFTWARE\Discord" /v EnableHardwareAcceleration /t REG_SZ /d 0 /f 2>$null | Out-Null
@@ -615,6 +724,9 @@ $Tweak_OverlayKiller = {
     reg add "HKCU\Software\Microsoft\GameBar" /v UseNexusForGameBarEnabled /t REG_DWORD /d 0 /f | Out-Null
 }
 
+# ============================================================
+# [42] Network Noise
+# ============================================================
 $Tweak_NetworkNoise = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v EnableMulticast /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v DisableBandwidthThrottling /t REG_DWORD /d 1 /f | Out-Null
@@ -626,6 +738,9 @@ $Tweak_NetworkNoise = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\FDResPub" /v Start /t REG_DWORD /d 4 /f | Out-Null
 }
 
+# ============================================================
+# [43] Diagnostic Services
+# ============================================================
 $Tweak_DiagnosticServices = {
     $diagList = @('DPS','WdiServiceHost','WdiSystemHost','diagnosticshub.standardcollector.service','diagsvc','TroubleShootingSvc')
     foreach ($s in $diagList) {
@@ -638,6 +753,9 @@ $Tweak_DiagnosticServices = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v AutoApproveOSDumps /t REG_DWORD /d 0 /f | Out-Null
 }
 
+# ============================================================
+# [44] System Restore Off
+# ============================================================
 $Tweak_SystemRestoreOff = {
     Disable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
     vssadmin delete shadows /all /quiet 2>$null | Out-Null
@@ -646,7 +764,8 @@ $Tweak_SystemRestoreOff = {
 }
 
 # ============================================================
-# FIX #8b: TabletInputService เอาออก (touch keyboard พัง)
+# [45] Additional Services v2
+# FIX: TabletInputService เอาออก (touch keyboard พัง)
 # ============================================================
 $Tweak_AdditionalServices2 = {
     $extraDisable2 = @(
@@ -673,6 +792,9 @@ $Tweak_AdditionalServices2 = {
     }
 }
 
+# ============================================================
+# [46] Spotlight and Clipboard
+# ============================================================
 $Tweak_SpotlightClipboard = {
     reg add "HKCU\Software\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsSpotlightFeatures /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v RotatingLockScreenEnabled /t REG_DWORD /d 0 /f | Out-Null
@@ -687,6 +809,9 @@ $Tweak_SpotlightClipboard = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v PublishUserActivities /t REG_DWORD /d 0 /f | Out-Null
 }
 
+# ============================================================
+# [47] NVIDIA Telemetry
+# ============================================================
 $Tweak_NvidiaTelemetry = {
     $nvTasks = @(
         '\NVIDIA\NvDriverUpdateCheckDaily{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
@@ -705,6 +830,9 @@ $Tweak_NvidiaTelemetry = {
     }
 }
 
+# ============================================================
+# [48] Copilot Recall Widgets
+# ============================================================
 $Tweak_CopilotRecall = {
     reg add "HKCU\Software\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f | Out-Null
@@ -718,6 +846,9 @@ $Tweak_CopilotRecall = {
     Stop-Process -Name "WidgetService" -Force -ErrorAction SilentlyContinue
 }
 
+# ============================================================
+# [49] Storage Sense and Edge
+# ============================================================
 $Tweak_StorageEdge = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" /v 01 /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v StartupBoostEnabled /t REG_DWORD /d 0 /f | Out-Null
@@ -732,6 +863,9 @@ $Tweak_StorageEdge = {
     Stop-Process -Name "msedge" -Force -ErrorAction SilentlyContinue
 }
 
+# ============================================================
+# [50] Boot and Login Speed
+# ============================================================
 $Tweak_BootLoginSpeed = {
     bcdedit /set bootmenupolicy standard | Out-Null
     bcdedit /set bootlog no | Out-Null
@@ -741,7 +875,8 @@ $Tweak_BootLoginSpeed = {
 }
 
 # ============================================================
-# FIX #3: เอา EventLog-Application/System/Security ออก (Event Viewer พัง)
+# [51] Autologger Disable
+# FIX: เอา EventLog-Application/System/Security ออก (Event Viewer พัง)
 # ============================================================
 $Tweak_AutologgerDisable = {
     $loggers = @(
@@ -770,6 +905,9 @@ $Tweak_AutologgerDisable = {
     reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowAutoConnectToWiFiSenseHotspots" /v Value /t REG_DWORD /d 0 /f | Out-Null
 }
 
+# ============================================================
+# [52] Pagefile Optimize
+# ============================================================
 $Tweak_PagefileOptimize = {
     $cs = Get-WmiObject Win32_ComputerSystem
     $cs.AutomaticManagedPagefile = $false
@@ -801,6 +939,9 @@ $Tweak_PagefileOptimize = {
     }
 }
 
+# ============================================================
+# [53] SmartScreen and AutoPlay
+# ============================================================
 $Tweak_SmartScreen = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableSmartScreen /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" /v SmartScreenEnabled /t REG_SZ /d Off /f | Out-Null
@@ -811,6 +952,9 @@ $Tweak_SmartScreen = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f | Out-Null
 }
 
+# ============================================================
+# [54] Scheduled Tasks v2
+# ============================================================
 $Tweak_ScheduledTasks2 = {
     $tasks = @(
         '\Microsoft\Windows\DiskFootprint\Diagnostics'
@@ -842,6 +986,188 @@ $Tweak_ScheduledTasks2 = {
     sc.exe config edgeupdatem start= disabled 2>$null | Out-Null
 }
 
+# ============================================================
+# [55] Large Send Offload + RSS Queues + Jumbo
+# ============================================================
+$Tweak_LSOandRSS = {
+    Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
+        $n = $_.Name
+        Disable-NetAdapterLso -Name $n -IPv4 -IPv6 -ErrorAction SilentlyContinue
+
+        $maxRss = (Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*NumRssQueues' -ErrorAction SilentlyContinue).RegistryValue
+        if ($maxRss) {
+            Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*NumRssQueues' -RegistryValue $maxRss -ErrorAction SilentlyContinue
+        }
+
+        try {
+            $jumbo = Get-NetAdapterAdvancedProperty -Name $n -DisplayName 'Jumbo Packet' -ErrorAction SilentlyContinue
+            if ($jumbo) {
+                Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Jumbo Packet' -DisplayValue '9014 Bytes' -ErrorAction SilentlyContinue
+            }
+        } catch {}
+
+        try {
+            Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*ReceiveBuffers' -RegistryValue 2048 -ErrorAction SilentlyContinue
+            Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*TransmitBuffers' -RegistryValue 2048 -ErrorAction SilentlyContinue
+        } catch {}
+    }
+}
+
+# ============================================================
+# [56] TCP Window Scaling / BDP Tuning
+# ============================================================
+$Tweak_TCPWindowTuning = {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v Tcp1323Opts /t REG_DWORD /d 3 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpWindowSize /t REG_DWORD /d 262144 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxFreeTcbs /t REG_DWORD /d 65536 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxUserPort /t REG_DWORD /d 65534 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpTimedWaitDelay /t REG_DWORD /d 30 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxHashTableSize /t REG_DWORD /d 65536 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v FastSendDatagramThreshold /t REG_DWORD /d 65536 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DefaultReceiveWindow /t REG_DWORD /d 65536 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DefaultSendWindow /t REG_DWORD /d 65536 /f | Out-Null
+}
+
+# ============================================================
+# [57] WiFi-Specific Tuning
+# ============================================================
+$Tweak_WiFiOptimize = {
+    Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object {
+        $_.MediaType -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wi-Fi|Wireless|WiFi|WLAN'
+    } | ForEach-Object {
+        $n = $_.Name
+
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*RoamingAggressiveness' -RegistryValue 4 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*PMARPOffload' -RegistryValue 0 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*PMNSOffload' -RegistryValue 0 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*PMWiFiRekeyOffload' -RegistryValue 0 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*FatChannelIntolerant' -RegistryValue 1 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*PacketCoalescing' -RegistryValue 0 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*PreferredBand' -RegistryValue 2 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*ThroughputBooster' -RegistryValue 0 -ErrorAction SilentlyContinue } catch {}
+    }
+
+    reg add "HKLM\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\config" /v AutoConnectAllowedOEM /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting" /v Value /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowAutoConnectToWiFiSenseHotspots" /v Value /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WcmSvc\GroupPolicy" /v fMinimizeConnections /t REG_DWORD /d 1 /f | Out-Null
+}
+
+# ============================================================
+# [58] TCP Congestion Control + Initial RTO
+# ============================================================
+$Tweak_TCPCongestion = {
+    $os = [System.Environment]::OSVersion.Version
+    if ($os.Build -ge 22621) {
+        netsh int tcp set supplemental template=Internet congestionprovider=default | Out-Null
+    } else {
+        netsh int tcp set supplemental template=Internet congestionprovider=cubic | Out-Null
+    }
+
+    netsh int tcp set supplemental template=Internet initialrto=1000 | Out-Null
+    netsh int tcp set supplemental template=Internet icw=10 | Out-Null
+
+    netsh int tcp set supplemental template=Datacenter congestionprovider=cubic | Out-Null
+    netsh int tcp set supplemental template=Datacenter initialrto=750 | Out-Null
+    netsh int tcp set supplemental template=Datacenter icw=10 | Out-Null
+}
+
+# ============================================================
+# [59] QUIC / UDP Offload / UDP Buffer
+# ============================================================
+$Tweak_UDPBuffer = {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DatagramSendBufferLength /t REG_DWORD /d 65536 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DatagramReceiveBufferLength /t REG_DWORD /d 65536 /f | Out-Null
+    netsh int udp set global uro=disabled | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxForwardBufferMemory /t REG_DWORD /d 65536 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxNumForwardPackets /t REG_DWORD /d 65536 /f | Out-Null
+}
+
+# ============================================================
+# [60] NIC Flow Control + RSS Core Assignment
+# ============================================================
+$Tweak_NICFlowControl = {
+    Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
+        $n = $_.Name
+
+        try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Packet Coalescing' -DisplayValue 'Disabled' -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*RssBaseProcNumber' -RegistryValue 1 -ErrorAction SilentlyContinue } catch {}
+
+        $cores = (Get-WmiObject Win32_Processor).NumberOfLogicalProcessors
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*MaxRssProcessors' -RegistryValue $cores -ErrorAction SilentlyContinue } catch {}
+
+        try { Disable-NetAdapterBinding -Name $n -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue } catch {}
+    }
+}
+
+# ============================================================
+# [61] QoS Packet Scheduler + DSCP Marking
+# ============================================================
+$Tweak_QoS = {
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v NonBestEffortLimit /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v DefaultTOSValue /t REG_DWORD /d 184 /f | Out-Null
+}
+
+# ============================================================
+# [62] NIC Power / Wake Deep Disable
+# ============================================================
+$Tweak_NICPowerDeep = {
+    Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
+        $n = $_.Name
+
+        Disable-NetAdapterPowerManagement -Name $n -ErrorAction SilentlyContinue
+
+        try {
+            Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Wake on Magic Packet' -DisplayValue 'Disabled' -ErrorAction SilentlyContinue
+            Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Wake on pattern match' -DisplayValue 'Disabled' -ErrorAction SilentlyContinue
+        } catch {}
+
+        try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Green Ethernet' -DisplayValue 'Disabled' -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Energy Efficient Ethernet' -DisplayValue 'Disabled' -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*AutoPowerSaveModeEnabled' -RegistryValue 0 -ErrorAction SilentlyContinue } catch {}
+        try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword 'SipsEnabled' -RegistryValue 0 -ErrorAction SilentlyContinue } catch {}
+    }
+
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 0 | Out-Null
+    powercfg /setactive SCHEME_CURRENT | Out-Null
+}
+
+# ============================================================
+# [63] DNS Cache + NetBIOS + LLMNR Flush
+# ============================================================
+$Tweak_DNSCache = {
+    ipconfig /flushdns | Out-Null
+    nbtstat -R | Out-Null
+    nbtstat -RR | Out-Null
+    arp -d * 2>$null | Out-Null
+
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v MaxCacheEntryTtlLimit /t REG_DWORD /d 86400 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v MaxSOACacheEntryTtlLimit /t REG_DWORD /d 120 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v NegativeCacheTime /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v NetFailureCacheTime /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v NegativeSOACacheTime /t REG_DWORD /d 0 /f | Out-Null
+
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v EnableMulticast /t REG_DWORD /d 0 /f | Out-Null
+
+    Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\services\NetBT\Parameters\Interfaces' -ErrorAction SilentlyContinue | ForEach-Object {
+        Set-ItemProperty -Path $_.PSPath -Name NetbiosOptions -Value 2 -ErrorAction SilentlyContinue
+    }
+}
+
+# ============================================================
+# [64] TCP Connection KeepAlive + SYN Protection
+# ============================================================
+$Tweak_TCPKeepAlive = {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v KeepAliveTime /t REG_DWORD /d 300000 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v KeepAliveInterval /t REG_DWORD /d 1000 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpNumConnections /t REG_DWORD /d 16777214 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v SynAttackProtect /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpMaxConnectResponseRetransmissions /t REG_DWORD /d 2 /f | Out-Null
+}
+
+# ============================================================
+# MASTER TABLE — 64 TWEAKS
+# ============================================================
 $AllTweaks = [ordered]@{
     "[01] Kernel and HPET"             = $Tweak_KernelHPET
     "[02] Timer Resolution"            = $Tweak_TimerResolution
@@ -897,6 +1223,16 @@ $AllTweaks = [ordered]@{
     "[52] Pagefile Optimize"           = $Tweak_PagefileOptimize
     "[53] SmartScreen and AutoPlay"    = $Tweak_SmartScreen
     "[54] Scheduled Tasks v2"          = $Tweak_ScheduledTasks2
+    "[55] LSO and RSS Queues"          = $Tweak_LSOandRSS
+    "[56] TCP Window BDP Tuning"       = $Tweak_TCPWindowTuning
+    "[57] WiFi Optimize"               = $Tweak_WiFiOptimize
+    "[58] TCP Congestion Control"      = $Tweak_TCPCongestion
+    "[59] UDP Buffer Tuning"           = $Tweak_UDPBuffer
+    "[60] NIC Flow and RSS Core"       = $Tweak_NICFlowControl
+    "[61] QoS and DSCP Marking"        = $Tweak_QoS
+    "[62] NIC Power Deep Disable"      = $Tweak_NICPowerDeep
+    "[63] DNS Cache and Flush"         = $Tweak_DNSCache
+    "[64] TCP KeepAlive and SYN"       = $Tweak_TCPKeepAlive
 }
 
 $script:selectedIndex = 0
@@ -1093,9 +1429,9 @@ function Execute-Selection {
         }
 
         if ($script:errorLog.Count -gt 0) {
-            $script:labelControls[0].Text = "> Done — $($script:errorLog.Count) error(s)"
+            $script:labelControls[0].Text = "> Done - $($script:errorLog.Count) error(s)"
         } else {
-            $script:labelControls[0].Text = "> Done — All 54 tweaks applied"
+            $script:labelControls[0].Text = "> Done - All 64 tweaks applied"
         }
         $script:labelControls[0].Refresh()
 
