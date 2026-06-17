@@ -24,6 +24,9 @@ if ($consoleHandle -ne [IntPtr]::Zero) {
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
+# ============================================================
+# FIX #1: ลบ nospeculationcontrol (ไม่มีอยู่จริงใน bcdedit)
+# ============================================================
 $Tweak_KernelHPET = {
     bcdedit /set useplatformclock no | Out-Null
     bcdedit /set useplatformtick yes | Out-Null
@@ -31,7 +34,6 @@ $Tweak_KernelHPET = {
     bcdedit /set tscsyncpolicy Enhanced | Out-Null
     bcdedit /set nx OptOut | Out-Null
     bcdedit /set synthetictimers yes | Out-Null
-    bcdedit /set nospeculationcontrol 1 | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v DisablePagingExecutive /t REG_DWORD /d 1 /f | Out-Null
 }
 
@@ -154,9 +156,12 @@ $Tweak_CoreParking = {
     powercfg /setactive SCHEME_CURRENT | Out-Null
 }
 
+# ============================================================
+# FIX #2: TdrLevel เปลี่ยนจาก 0 เป็น 2 (GPU recover ได้)
+# ============================================================
 $Tweak_GpuDisplay = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v HwSchMode /t REG_DWORD /d 2 /f | Out-Null
-    reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrLevel /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrLevel /t REG_DWORD /d 2 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrDelay /t REG_DWORD /d 60 /f | Out-Null
 }
 
@@ -170,6 +175,9 @@ $Tweak_AudioLatency = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
 }
 
+# ============================================================
+# FIX #6: เอา winsock reset กับ ip reset ออก (เน็ตหลุดต้อง reboot)
+# ============================================================
 $Tweak_NetworkDNS = {
     netsh int tcp set global rss=enabled | Out-Null
     netsh int tcp set global autotuninglevel=normal | Out-Null
@@ -210,8 +218,6 @@ $Tweak_NetworkDNS = {
         Disable-NetAdapterPowerManagement -Name $_.Name -ErrorAction SilentlyContinue
     }
     ipconfig /flushdns | Out-Null
-    netsh winsock reset | Out-Null
-    netsh int ip reset | Out-Null
 }
 
 $Tweak_PrivacyTelemetry = {
@@ -243,13 +249,16 @@ $Tweak_Services = {
     }
 }
 
+# ============================================================
+# FIX #4: SoftwareDistribution ลบแค่ contents ไม่ใช่ทั้ง folder
+# ============================================================
 $Tweak_JunkCleanup = {
     Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$env:WINDIR\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$env:WINDIR\Prefetch\*" -Recurse -Force -ErrorAction SilentlyContinue
     Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
     Stop-Service UsoSvc -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "$env:WINDIR\SoftwareDistribution" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$env:WINDIR\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
     Start-Service wuauserv -ErrorAction SilentlyContinue
     Get-WinEvent -ListLog * -ErrorAction SilentlyContinue | ForEach-Object {
         try { wevtutil.exe cl $_.LogName } catch {}
@@ -257,13 +266,18 @@ $Tweak_JunkCleanup = {
     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
 }
 
+# ============================================================
+# FIX #5: backup เฉพาะตอนยังไม่มี backup (ไม่ทับต้นฉบับ)
+# ============================================================
 $Tweak_IniCompat = {
     $systemIni = Join-Path $env:windir 'system.ini'
     $winIni    = Join-Path $env:windir 'win.ini'
     $marker    = "; GOATX_TWEAK_MARKER"
 
     foreach ($f in @($systemIni, $winIni)) {
-        Copy-Item $f "$f.backup" -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path "$f.backup")) {
+            Copy-Item $f "$f.backup" -Force -ErrorAction SilentlyContinue
+        }
         $content = Get-Content $f -ErrorAction SilentlyContinue
         if ($content) {
             $markerIdx = -1
@@ -345,6 +359,9 @@ $Tweak_InterruptAffinity = {
     }
 }
 
+# ============================================================
+# FIX #7: เอา Disable-NetAdapterChecksumOffload ออก (CPU load เปล่าๆ)
+# ============================================================
 $Tweak_NICAdvanced = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
         $n = $_.Name
@@ -354,7 +371,6 @@ $Tweak_NICAdvanced = {
         Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Green Ethernet' -DisplayValue 'Disabled' -ErrorAction SilentlyContinue
         Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Receive Buffers' -DisplayValue '2048' -ErrorAction SilentlyContinue
         Set-NetAdapterAdvancedProperty -Name $n -DisplayName 'Transmit Buffers' -DisplayValue '2048' -ErrorAction SilentlyContinue
-        Disable-NetAdapterChecksumOffload -Name $n -ErrorAction SilentlyContinue
         Disable-NetAdapterRsc -Name $n -ErrorAction SilentlyContinue
         Set-NetAdapterPowerManagement -Name $n -WakeOnMagicPacket Disabled -WakeOnPattern Disabled -ErrorAction SilentlyContinue
     }
@@ -556,6 +572,9 @@ $Tweak_WindowsAdsTips = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableSoftLanding /t REG_DWORD /d 1 /f | Out-Null
 }
 
+# ============================================================
+# FIX #8a: Spooler กับ WbioSrvc เอาออก (พิมพ์/Hello พัง)
+# ============================================================
 $Tweak_AdditionalServices = {
     $extraDisable = @(
         'WpnService'
@@ -563,8 +582,6 @@ $Tweak_AdditionalServices = {
         'SSDPSRV'
         'fdPHost'
         'FDResPub'
-        'Spooler'
-        'WbioSrvc'
         'CDPSvc'
         'CDPUserSvc'
         'PcaSvc'
@@ -628,13 +645,15 @@ $Tweak_SystemRestoreOff = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v DisableSR /t REG_DWORD /d 1 /f | Out-Null
 }
 
+# ============================================================
+# FIX #8b: TabletInputService เอาออก (touch keyboard พัง)
+# ============================================================
 $Tweak_AdditionalServices2 = {
     $extraDisable2 = @(
         'iphlpsvc'
         'WinRM'
         'wercplsupport'
         'WerSvc'
-        'TabletInputService'
         'WMPNetworkSvc'
         'UevAgentService'
         'DsSvc'
@@ -721,11 +740,11 @@ $Tweak_BootLoginSpeed = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v DisableStatusMessages /t REG_DWORD /d 1 /f | Out-Null
 }
 
+# ============================================================
+# FIX #3: เอา EventLog-Application/System/Security ออก (Event Viewer พัง)
+# ============================================================
 $Tweak_AutologgerDisable = {
     $loggers = @(
-        'EventLog-Application'
-        'EventLog-System'
-        'EventLog-Security'
         'DiagLog'
         'Diagtrack-Listener'
         'Circular Kernel Context Logger'
@@ -1098,9 +1117,15 @@ function Execute-Selection {
     }
 }
 
+# ============================================================
+# FIX #9: Escape ไม่ปิดฟอร์มระหว่างรัน tweak
+# ============================================================
 $script:KeyHandler = {
     param($s, $e)
-    if ($e.KeyCode -eq 'Escape') { $form.Close(); return }
+    if ($e.KeyCode -eq 'Escape') {
+        if (-not $script:isRunning) { $form.Close() }
+        return
+    }
     if ($script:isRunning) { return }
     switch ($e.KeyCode) {
         'Up' {
