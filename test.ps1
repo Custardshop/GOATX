@@ -591,29 +591,6 @@ $Tweak_AdditionalServices = {
     }
 }
 
-$Tweak_StandbyListCleaner = {
-    Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public class MemClean {
-    [DllImport("ntdll.dll")]
-    public static extern int NtSetSystemInformation(int InfoClass, ref int Info, int Size);
-    public static void CleanStandby() {
-        int cmd = 1;
-        NtSetSystemInformation(80, ref cmd, 4);
-    }
-}
-"@ -ErrorAction SilentlyContinue
-    [MemClean]::CleanStandby()
-
-    $helperPath = "$env:SystemRoot\System32\GOATX_StandbyClean.ps1"
-    @'
-Add-Type -TypeDefinition "using System;using System.Runtime.InteropServices;public class M{[DllImport(\"ntdll.dll\")]public static extern int NtSetSystemInformation(int i,ref int v,int s);public static void C(){int v=1;NtSetSystemInformation(80,ref v,4);}}"
-[M]::C()
-'@ | Out-File $helperPath -Encoding Unicode -Force
-    schtasks /Create /TN "GOATX_StandbyListCleaner" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$helperPath`"" /SC MINUTE /MO 30 /RL HIGHEST /F 2>$null | Out-Null
-}
-
 $Tweak_OverlayKiller = {
     reg add "HKCU\SOFTWARE\Valve\Steam" /v EnableGameOverlay /t REG_SZ /d 0 /f 2>$null | Out-Null
     reg add "HKCU\SOFTWARE\Discord" /v EnableHardwareAcceleration /t REG_SZ /d 0 /f 2>$null | Out-Null
@@ -887,21 +864,20 @@ $AllTweaks = [ordered]@{
     "[38] Telemetry Tasks"             = $Tweak_TelemetryTasks
     "[39] Windows Ads and Tips"        = $Tweak_WindowsAdsTips
     "[40] Additional Services"         = $Tweak_AdditionalServices
-    "[41] Standby List Cleaner"        = $Tweak_StandbyListCleaner
-    "[42] Overlay Killer"              = $Tweak_OverlayKiller
-    "[43] Network Noise"               = $Tweak_NetworkNoise
-    "[44] Diagnostic Services"         = $Tweak_DiagnosticServices
-    "[45] System Restore Off"          = $Tweak_SystemRestoreOff
-    "[46] Additional Services v2"      = $Tweak_AdditionalServices2
-    "[47] Spotlight and Clipboard"     = $Tweak_SpotlightClipboard
-    "[48] NVIDIA Telemetry"            = $Tweak_NvidiaTelemetry
-    "[49] Copilot Recall Widgets"      = $Tweak_CopilotRecall
-    "[50] Storage Sense and Edge"      = $Tweak_StorageEdge
-    "[51] Boot and Login Speed"        = $Tweak_BootLoginSpeed
-    "[52] Autologger Disable"          = $Tweak_AutologgerDisable
-    "[53] Pagefile Optimize"           = $Tweak_PagefileOptimize
-    "[54] SmartScreen and AutoPlay"    = $Tweak_SmartScreen
-    "[55] Scheduled Tasks v2"          = $Tweak_ScheduledTasks2
+    "[41] Overlay Killer"              = $Tweak_OverlayKiller
+    "[42] Network Noise"               = $Tweak_NetworkNoise
+    "[43] Diagnostic Services"         = $Tweak_DiagnosticServices
+    "[44] System Restore Off"          = $Tweak_SystemRestoreOff
+    "[45] Additional Services v2"      = $Tweak_AdditionalServices2
+    "[46] Spotlight and Clipboard"     = $Tweak_SpotlightClipboard
+    "[47] NVIDIA Telemetry"            = $Tweak_NvidiaTelemetry
+    "[48] Copilot Recall Widgets"      = $Tweak_CopilotRecall
+    "[49] Storage Sense and Edge"      = $Tweak_StorageEdge
+    "[50] Boot and Login Speed"        = $Tweak_BootLoginSpeed
+    "[51] Autologger Disable"          = $Tweak_AutologgerDisable
+    "[52] Pagefile Optimize"           = $Tweak_PagefileOptimize
+    "[53] SmartScreen and AutoPlay"    = $Tweak_SmartScreen
+    "[54] Scheduled Tasks v2"          = $Tweak_ScheduledTasks2
 }
 
 $script:selectedIndex = 0
@@ -1100,7 +1076,7 @@ function Execute-Selection {
         if ($script:errorLog.Count -gt 0) {
             $script:labelControls[0].Text = "> Done — $($script:errorLog.Count) error(s)"
         } else {
-            $script:labelControls[0].Text = "> Done — All 55 tweaks applied"
+            $script:labelControls[0].Text = "> Done — All 54 tweaks applied"
         }
         $script:labelControls[0].Refresh()
 
