@@ -492,7 +492,6 @@ $Tweak_GpuCacheCleanup = {
 
 $Tweak_MPODisable = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\DirectX\GraphicsSettings" /v SwapEffectUpgradeEnable /t REG_DWORD /d 0 /f | Out-Null
 }
 
 $Tweak_PciEAspm = {
