@@ -718,6 +718,159 @@ $Tweak_NvidiaTelemetry = {
     }
 }
 
+$Tweak_CopilotRecall = {
+    # ปิด Windows Copilot (Windows 11)
+    reg add "HKCU\Software\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f | Out-Null
+    # ปิด Copilot button บน taskbar
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowCopilotButton /t REG_DWORD /d 0 /f | Out-Null
+    # ปิด Windows Recall (Windows 11 24H2) — screenshot ทุกอย่างตลอดเวลา
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI" /v DisableAIDataAnalysis /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKCU\Software\Policies\Microsoft\Windows\WindowsAI" /v DisableAIDataAnalysis /t REG_DWORD /d 1 /f | Out-Null
+    # ปิด Widgets (Edge WebView2 background process)
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarDa /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowWidgetService /t REG_DWORD /d 0 /f | Out-Null
+    # ปิด Widget process ทันที
+    Stop-Process -Name "Widgets" -Force -ErrorAction SilentlyContinue
+    Stop-Process -Name "WidgetService" -Force -ErrorAction SilentlyContinue
+}
+
+$Tweak_StorageEdge = {
+    # ปิด Storage Sense (auto disk cleanup ที่รัน background)
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" /v 01 /t REG_DWORD /d 0 /f | Out-Null
+    # ปิด Edge pre-launch + tab preload + background
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v StartupBoostEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v BackgroundModeEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v EdgeCollectionsEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v EdgeSidebarEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v HubsSidebarEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v EdgeShoppingAssistantEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v ShowRecommendationsEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\MicrosoftEdge\Main" /v AllowPrelaunch /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\MicrosoftEdge\TabPreloader" /v AllowTabPreloading /t REG_DWORD /d 0 /f | Out-Null
+    # ฆ่า Edge background processes
+    Stop-Process -Name "msedge" -Force -ErrorAction SilentlyContinue
+}
+
+$Tweak_BootLoginSpeed = {
+    # ปิด boot animation (bcdedit)
+    bcdedit /set bootmenupolicy standard | Out-Null
+    # ปิด boot log
+    bcdedit /set bootlog no | Out-Null
+    # ปิด Lock Screen
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Personalization" /v NoLockScreen /t REG_DWORD /d 1 /f | Out-Null
+    # ปิด Logon animation
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v DisableLogonBackgroundImage /t REG_DWORD /d 1 /f | Out-Null
+    # ปิด boot logo
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v DisableStatusMessages /t REG_DWORD /d 1 /f | Out-Null
+}
+
+$Tweak_AutologgerDisable = {
+    # ปิด ETW autologgers — ลด CPU overhead จาก event tracing
+    $loggers = @(
+        'EventLog-Application'
+        'EventLog-System'
+        'EventLog-Security'
+        'DiagLog'
+        'Diagtrack-Listener'
+        'Circular Kernel Context Logger'
+        'Microsoft-Windows-Rdp-Graphics-RdpIdd-Trace'
+        'Microsoft-Windows-Application-Experience'
+        'Microsoft-Windows-Application-Experience-Program-Inventory'
+        'Microsoft-Windows-Application-Experience-Program-Telemetry'
+        'Microsoft-Windows-Kernel-PnP'
+        'Microsoft-Windows-SetupPlatform'
+        'Microsoft-Windows-SetupQueue'
+        'NetCore'
+        'NtfsLog'
+        'UBPM'
+        'UserNotPresentTraceSession'
+        'WiFiSession'
+        'WindowsDefenderAudit'
+    )
+    foreach ($logger in $loggers) {
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\WMI\Autologger\$logger" /v Start /t REG_DWORD /d 0 /f 2>$null | Out-Null
+    }
+    # ปิด WiFi Sense
+    reg add "HKLM\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\config" /v AutoConnectAllowedOEM /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting" /v Value /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowAutoConnectToWiFiSenseHotspots" /v Value /t REG_DWORD /d 0 /f | Out-Null
+}
+
+$Tweak_PagefileOptimize = {
+    # ตั้ง pagefile ขนาดคงที่ = ไม่ fragment (เฉพาะ drive C)
+    # Disable auto pagefile
+    $cs = Get-WmiObject Win32_ComputerSystem
+    $cs.AutomaticManagedPagefile = $false
+    $cs.Put() | Out-Null
+    # ตั้ง initial = max (ลด fragmentation)
+    $pagefile = Get-WmiObject Win32_PageFileSetting -Filter "SettingID='pagefile.sys @ C:'"
+    if ($pagefile) {
+        $ram = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1MB)
+        $size = [math]::Max(4096, [math]::Round($ram * 0.5))
+        $pagefile.InitialSize = $size
+        $pagefile.MaximumSize = $size
+        $pagefile.Put() | Out-Null
+    }
+    # ปิด Content Indexing บน non-OS drives
+    Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -and $_.DriveLetter -ne 'C' } | ForEach-Object {
+        $drive = $_.DriveLetter + ":"
+        $obj = Get-WmiObject -Query "SELECT * FROM Win32_Volume WHERE DriveLetter='$drive'"
+        if ($obj) {
+            $obj.IndexingEnabled = $false
+            $obj.Put() | Out-Null
+        }
+    }
+}
+
+$Tweak_SmartScreen = {
+    # ปิด SmartScreen (reduces disk I/O + network check on every exe)
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableSmartScreen /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" /v SmartScreenEnabled /t REG_SZ /d Off /f | Out-Null
+    # ปิด Phishing Filter
+    reg add "HKCU\Software\Microsoft\Internet Explorer\PhishingFilter" /v EnabledV9 /t REG_DWORD /d 0 /f | Out-Null
+    # ปิด Cloud-based protection
+    Set-MpPreference -PUAProtection 0 -ErrorAction SilentlyContinue
+    # ปิด Windows Script Host (ป้องกัน malware scripts + ลด overhead)
+    reg add "HKLM\SOFTWARE\Microsoft\Windows Script Host\Settings" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    # ปิด AutoPlay
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers" /v DisableAutoplay /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f | Out-Null
+}
+
+$Tweak_ScheduledTasks2 = {
+    $tasks = @(
+        '\Microsoft\Windows\DiskFootprint\Diagnostics'
+        '\Microsoft\Windows\DiskFootprint\StorageSense'
+        '\Microsoft\Windows\PerfTrack\BackgroundConfigSurveyor'
+        '\Microsoft\Windows\Shell\FamilySafetyMonitor'
+        '\Microsoft\Windows\Shell\FamilySafetyRefreshTask'
+        '\Microsoft\Windows\Shell\IndexerAutomaticMaintenance'
+        '\Microsoft\Windows\Diagnosis\Scheduled'
+        '\Microsoft\Windows\Diagnosis\RecommendedTroubleshootingScanner'
+        '\Microsoft\Windows\Windows Error Reporting\QueueReporting'
+        '\Microsoft\Windows\Chkdsk\ProactiveScan'
+        '\Microsoft\Windows\Defrag\ScheduledDefrag'
+        '\Microsoft\Windows\Power Efficiency Diagnostics\AnalyzeSystem'
+        '\Microsoft\Office\OfficeTelemetryAgentFallBack2016'
+        '\Microsoft\Office\OfficeTelemetryAgentLogOn2016'
+        '\Microsoft\Office\Office ClickToRun Service Monitor'
+        '\MicrosoftEdgeUpdateTaskMachineCore'
+        '\MicrosoftEdgeUpdateTaskMachineUA'
+        '\Microsoft\EdgeUpdate\EdgeUpdateTaskMachineCore'
+        '\Microsoft\EdgeUpdate\EdgeUpdateTaskMachineUA'
+    )
+    foreach ($t in $tasks) {
+        Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null
+    }
+    # หยุด Edge Update service
+    sc.exe stop edgeupdate 2>$null | Out-Null
+    sc.exe config edgeupdate start= disabled 2>$null | Out-Null
+    sc.exe stop edgeupdatem 2>$null | Out-Null
+    sc.exe config edgeupdatem start= disabled 2>$null | Out-Null
+}
+
 # ============================================================
 # --- 3. รายการปุ่ม ---
 # ============================================================
@@ -771,6 +924,13 @@ $AllTweaks = [ordered]@{
     "[46] Additional Services v2"      = $Tweak_AdditionalServices2
     "[47] Spotlight and Clipboard"     = $Tweak_SpotlightClipboard
     "[48] NVIDIA Telemetry"            = $Tweak_NvidiaTelemetry
+    "[49] Copilot Recall Widgets"      = $Tweak_CopilotRecall
+    "[50] Storage Sense and Edge"      = $Tweak_StorageEdge
+    "[51] Boot and Login Speed"        = $Tweak_BootLoginSpeed
+    "[52] Autologger Disable"          = $Tweak_AutologgerDisable
+    "[53] Pagefile Optimize"           = $Tweak_PagefileOptimize
+    "[54] SmartScreen and AutoPlay"    = $Tweak_SmartScreen
+    "[55] Scheduled Tasks v2"          = $Tweak_ScheduledTasks2
 }
 
 # ============================================================
