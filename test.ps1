@@ -1,12 +1,3 @@
-<#
-============================================================
-  Windows Performance Tweaks - GUI (WinForms, terminal look)
-  แก้ไข: Title+Subtitle gradient paint, Options เป็น Label สี match gradient
-  v3: fixed error logging position, IniCompat re-run safe
-============================================================
-#>
-
-# --- 1. ตรวจสอบสิทธิ์ Administrator ---
 $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -32,10 +23,6 @@ if ($consoleHandle -ne [IntPtr]::Zero) {
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-
-# ============================================================
-# --- 2. กลุ่ม tweak ทั้งหมด ---
-# ============================================================
 
 $Tweak_KernelHPET = {
     bcdedit /set useplatformclock no | Out-Null
@@ -244,7 +231,6 @@ $Tweak_PrivacyTelemetry = {
 }
 
 $Tweak_Services = {
-    # WSearch 保留 — ใช้ค้นหาไฟล์
     $disableList = @('DiagTrack','MapsBroker','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','Fax','RetailDemo','RemoteRegistry','WerSvc')
     foreach ($s in $disableList) {
         sc.exe stop $s 2>$null | Out-Null
@@ -288,7 +274,6 @@ $Tweak_IniCompat = {
                 }
             }
             if ($markerIdx -ge 0) {
-                # ตัดทุกอย่างตั้งแต่ marker ลงไป (ป้องกันเนื้อหาซ้ำ)
                 $trimmed = $content[0..($markerIdx - 1)]
                 Set-Content $f ($trimmed -join "`r`n") -Force
             }
@@ -345,17 +330,14 @@ $Tweak_InterruptAffinity = {
         if (-not (Test-Path $affPath)) {
             New-Item -Path $affPath -Force -ErrorAction SilentlyContinue | Out-Null
         }
-        # GPU → Core 1 (binary 0x02)
         if ($hwid -and ($hwid[0] -match 'VEN_10DE' -or $hwid[0] -match 'VEN_1002')) {
             Set-ItemProperty -Path $affPath -Name 'DevicePolicy' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue
             Set-ItemProperty -Path $affPath -Name 'AssignmentSetOverride' -Value 0x02 -Type DWord -Force -ErrorAction SilentlyContinue
         }
-        # NIC → Core 2 (binary 0x04)
         if ($desc -match 'Ethernet|Network|LAN|Intel.*Connection' -or ($hwid -and ($hwid[0] -match 'VEN_8086.*DEV_15' -or $hwid[0] -match 'VEN_10EC'))) {
             Set-ItemProperty -Path $affPath -Name 'DevicePolicy' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue
             Set-ItemProperty -Path $affPath -Name 'AssignmentSetOverride' -Value 0x04 -Type DWord -Force -ErrorAction SilentlyContinue
         }
-        # USB xHCI → Core 3 (binary 0x08)
         if ($desc -match 'USB|xHCI|Host Controller') {
             Set-ItemProperty -Path $affPath -Name 'DevicePolicy' -Value 4 -Type DWord -Force -ErrorAction SilentlyContinue
             Set-ItemProperty -Path $affPath -Name 'AssignmentSetOverride' -Value 0x08 -Type DWord -Force -ErrorAction SilentlyContinue
@@ -632,24 +614,14 @@ Add-Type -TypeDefinition "using System;using System.Runtime.InteropServices;publ
     schtasks /Create /TN "GOATX_StandbyListCleaner" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$helperPath`"" /SC MINUTE /MO 30 /RL HIGHEST /F 2>$null | Out-Null
 }
 
-# ============================================================
-# --- Block 42-55 ---
-# ============================================================
-
 $Tweak_OverlayKiller = {
-    # NVIDIA Overlay — เก็บไว้ (ใช้ Instant Replay + Record)
-    # ปิด Steam Overlay
     reg add "HKCU\SOFTWARE\Valve\Steam" /v EnableGameOverlay /t REG_SZ /d 0 /f 2>$null | Out-Null
-    # ปิด Discord Overlay
     reg add "HKCU\SOFTWARE\Discord" /v EnableHardwareAcceleration /t REG_SZ /d 0 /f 2>$null | Out-Null
-    # ปิด EA App overlay
     reg add "HKLM\SOFTWARE\EA\EA Desktop" /v EnableOverlay /t REG_DWORD /d 0 /f 2>$null | Out-Null
-    # ปิด Xbox Game Bar overlay
     reg add "HKCU\Software\Microsoft\GameBar" /v UseNexusForGameBarEnabled /t REG_DWORD /d 0 /f | Out-Null
 }
 
 $Tweak_NetworkNoise = {
-    # NlaSvc 保留 — ปิดแล้ว firewall rules เพี้ยน อันตราย
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v EnableMulticast /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v DisableBandwidthThrottling /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v DisableLargeMtu /t REG_DWORD /d 0 /f | Out-Null
@@ -720,8 +692,6 @@ $Tweak_SpotlightClipboard = {
 }
 
 $Tweak_NvidiaTelemetry = {
-    # NvTelemetryContainer 保留 — GeForce Experience overlay ต้องใช้
-    # ปิด NVIDIA crash report tasks
     $nvTasks = @(
         '\NVIDIA\NvDriverUpdateCheckDaily{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
         '\NVIDIA\NvTmRep_CrashReport1_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
@@ -733,7 +703,6 @@ $Tweak_NvidiaTelemetry = {
     foreach ($t in $nvTasks) {
         Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null
     }
-    # ปิด NVIDIA telemetry ผ่าน registry
     $nvTelemetryPath = "HKLM:\SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client"
     if (Test-Path $nvTelemetryPath) {
         Set-ItemProperty -Path $nvTelemetryPath -Name 'OptInOrOutPreference' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
@@ -741,27 +710,20 @@ $Tweak_NvidiaTelemetry = {
 }
 
 $Tweak_CopilotRecall = {
-    # ปิด Windows Copilot (Windows 11)
     reg add "HKCU\Software\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot" /v TurnOffWindowsCopilot /t REG_DWORD /d 1 /f | Out-Null
-    # ปิด Copilot button บน taskbar
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowCopilotButton /t REG_DWORD /d 0 /f | Out-Null
-    # ปิด Windows Recall (Windows 11 24H2) — screenshot ทุกอย่างตลอดเวลา
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsAI" /v DisableAIDataAnalysis /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKCU\Software\Policies\Microsoft\Windows\WindowsAI" /v DisableAIDataAnalysis /t REG_DWORD /d 1 /f | Out-Null
-    # ปิด Widgets (Edge WebView2 background process)
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Dsh" /v AllowNewsAndInterests /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarDa /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowWidgetService /t REG_DWORD /d 0 /f | Out-Null
-    # ปิด Widget process ทันที
     Stop-Process -Name "Widgets" -Force -ErrorAction SilentlyContinue
     Stop-Process -Name "WidgetService" -Force -ErrorAction SilentlyContinue
 }
 
 $Tweak_StorageEdge = {
-    # ปิด Storage Sense (auto disk cleanup ที่รัน background)
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" /v 01 /t REG_DWORD /d 0 /f | Out-Null
-    # ปิด Edge pre-launch + tab preload + background
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v StartupBoostEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v BackgroundModeEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v EdgeCollectionsEnabled /t REG_DWORD /d 0 /f | Out-Null
@@ -771,25 +733,18 @@ $Tweak_StorageEdge = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v ShowRecommendationsEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\MicrosoftEdge\Main" /v AllowPrelaunch /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\MicrosoftEdge\TabPreloader" /v AllowTabPreloading /t REG_DWORD /d 0 /f | Out-Null
-    # ฆ่า Edge background processes
     Stop-Process -Name "msedge" -Force -ErrorAction SilentlyContinue
 }
 
 $Tweak_BootLoginSpeed = {
-    # ปิด boot animation (bcdedit)
     bcdedit /set bootmenupolicy standard | Out-Null
-    # ปิด boot log
     bcdedit /set bootlog no | Out-Null
-    # ปิด Lock Screen
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Personalization" /v NoLockScreen /t REG_DWORD /d 1 /f | Out-Null
-    # ปิด Logon animation
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v DisableLogonBackgroundImage /t REG_DWORD /d 1 /f | Out-Null
-    # ปิด boot logo
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v DisableStatusMessages /t REG_DWORD /d 1 /f | Out-Null
 }
 
 $Tweak_AutologgerDisable = {
-    # ปิด ETW autologgers — ลด CPU overhead จาก event tracing
     $loggers = @(
         'EventLog-Application'
         'EventLog-System'
@@ -814,7 +769,6 @@ $Tweak_AutologgerDisable = {
     foreach ($logger in $loggers) {
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\WMI\Autologger\$logger" /v Start /t REG_DWORD /d 0 /f 2>$null | Out-Null
     }
-    # ปิด WiFi Sense
     reg add "HKLM\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\config" /v AutoConnectAllowedOEM /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting" /v Value /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowAutoConnectToWiFiSenseHotspots" /v Value /t REG_DWORD /d 0 /f | Out-Null
@@ -841,7 +795,6 @@ $Tweak_PagefileOptimize = {
         $newPF.Put() | Out-Null
     }
 
-    # Content Indexing บน non-OS drives
     Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -and $_.DriveLetter -ne 'C' } | ForEach-Object {
         $drive = $_.DriveLetter + ":"
         $obj = Get-WmiObject -Query "SELECT * FROM Win32_Volume WHERE DriveLetter='$drive'"
@@ -853,16 +806,11 @@ $Tweak_PagefileOptimize = {
 }
 
 $Tweak_SmartScreen = {
-    # ปิด SmartScreen
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableSmartScreen /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer" /v SmartScreenEnabled /t REG_SZ /d Off /f | Out-Null
-    # ปิด Phishing Filter
     reg add "HKCU\Software\Microsoft\Internet Explorer\PhishingFilter" /v EnabledV9 /t REG_DWORD /d 0 /f | Out-Null
-    # ปิด Cloud-based protection
     Set-MpPreference -PUAProtection 0 -ErrorAction SilentlyContinue
-    # ปิด Windows Script Host
     reg add "HKLM\SOFTWARE\Microsoft\Windows Script Host\Settings" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
-    # ปิด AutoPlay
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers" /v DisableAutoplay /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f | Out-Null
 }
@@ -892,16 +840,11 @@ $Tweak_ScheduledTasks2 = {
     foreach ($t in $tasks) {
         Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null
     }
-    # หยุด Edge Update service
     sc.exe stop edgeupdate 2>$null | Out-Null
     sc.exe config edgeupdate start= disabled 2>$null | Out-Null
     sc.exe stop edgeupdatem 2>$null | Out-Null
     sc.exe config edgeupdatem start= disabled 2>$null | Out-Null
 }
-
-# ============================================================
-# --- 3. รายการปุ่ม ---
-# ============================================================
 
 $AllTweaks = [ordered]@{
     "[01] Kernel and HPET"             = $Tweak_KernelHPET
@@ -960,10 +903,6 @@ $AllTweaks = [ordered]@{
     "[54] SmartScreen and AutoPlay"    = $Tweak_SmartScreen
     "[55] Scheduled Tasks v2"          = $Tweak_ScheduledTasks2
 }
-
-# ============================================================
-# --- 4. GUI ---
-# ============================================================
 
 $script:selectedIndex = 0
 $script:isRunning     = $false
@@ -1157,6 +1096,7 @@ function Execute-Selection {
                 $script:errorLog += "$key : $($_.Exception.Message)"
             }
         }
+
         if ($script:errorLog.Count -gt 0) {
             $script:labelControls[0].Text = "> Done — $($script:errorLog.Count) error(s)"
         } else {
@@ -1164,7 +1104,9 @@ function Execute-Selection {
         }
         $script:labelControls[0].Refresh()
 
-        # Timer แทน Sleep — ไม่บล็อก UI
+        try { [System.Media.SystemSounds]::Beep.Play() } catch {}
+        try { [Console]::Beep(1200, 300) } catch {}
+
         $timer = New-Object System.Windows.Forms.Timer
         $timer.Interval = 1500
         $timer.Add_Tick({
