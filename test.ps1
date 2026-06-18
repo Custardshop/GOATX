@@ -1,3 +1,10 @@
+# ============================================================
+#  G O A T X   L E G E N D A R Y   E D I T I O N
+#  Windows 10 22H2 Ultimate Optimization Suite
+#  75 System Tweaks | Animated Cyberpunk UI | GDI+ Assets
+# ============================================================
+
+# ── [ADMIN ELEVATION] ──────────────────────────────────────
 $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -10,6 +17,7 @@ if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adm
     exit
 }
 
+# ── [HIDE CONSOLE] ─────────────────────────────────────────
 Add-Type -Name Win32ShowWindow -Namespace Native -MemberDefinition @"
 [DllImport("user32.dll")]
 public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -25,8 +33,117 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # ============================================================
-# [01] Kernel + Timer (TSC optimal for Win10)
-# FIX: ลบ synthetictimers (ไม่ใช่ valid BCD option)
+#  PROGRAMMATIC IMAGE & ICON GENERATION ENGINE
+# ============================================================
+
+function New-AppIcon {
+    param([int]$Size = 64)
+    $bmp = New-Object System.Drawing.Bitmap($Size, $Size)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = 'AntiAlias'
+    $g.TextRenderingHint = 'AntiAliasGridFit'
+    $g.Clear([System.Drawing.Color]::FromArgb(12, 12, 24))
+
+    $cp = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $cp.AddEllipse(4, 4, $Size - 8, $Size - 8)
+    $pb = New-Object System.Drawing.Drawing2D.PathGradientBrush($cp)
+    $pb.CenterPoint = New-Object System.Drawing.PointF($Size * 0.38, $Size * 0.35)
+    $pb.CenterColor = [System.Drawing.Color]::FromArgb(130, 220, 255)
+    $pb.SurroundColors = @([System.Drawing.Color]::FromArgb(25, 50, 100))
+    $g.FillPath($pb, $cp)
+
+    $rp = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(100, 180, 255), 2)
+    $g.DrawEllipse($rp, 5, 5, $Size - 10, $Size - 10)
+    $ip = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(30, 140, 220), 1)
+    $g.DrawEllipse($ip, 10, 10, $Size - 20, $Size - 20)
+
+    $fs = [Math]::Round($Size * 0.44)
+    $fn = New-Object System.Drawing.Font("Consolas", $fs, 'Bold')
+    $sf = New-Object System.Drawing.StringFormat
+    $sf.Alignment = 'Center'; $sf.LineAlignment = 'Center'
+    $sb = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(40, 160, 255))
+    $g.DrawString("G", $fn, $sb, $Size/2 + 2, $Size/2 + 2, $sf)
+    $tb = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+        (New-Object System.Drawing.Point(0, $Size/3)),
+        (New-Object System.Drawing.Point($Size, $Size*2/3)),
+        [System.Drawing.Color]::White, [System.Drawing.Color]::FromArgb(200, 230, 255))
+    $g.DrawString("G", $fn, $tb, $Size/2, $Size/2, $sf)
+
+    $g.Dispose()
+    $hIcon = $bmp.GetHicon()
+    return [System.Drawing.Icon]::FromHandle($hIcon)
+}
+
+function New-LogoImage {
+    param([int]$W = 68, [int]$H = 68)
+    $bmp = New-Object System.Drawing.Bitmap($W, $H)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = 'AntiAlias'
+    $g.TextRenderingHint = 'AntiAliasGridFit'
+    $g.Clear([System.Drawing.Color]::Transparent)
+
+    $cx = $W / 2; $cy = $H / 2; $rad = [Math]::Min($W, $H) / 2 - 5
+    $pts = @()
+    for ($i = 0; $i -lt 6; $i++) {
+        $a = [Math]::PI / 180 * (60 * $i - 30)
+        $pts += New-Object System.Drawing.PointF(($cx + $rad * [Math]::Cos($a)), ($cy + $rad * [Math]::Sin($a)))
+    }
+    $hp = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $hp.AddPolygon($pts)
+    $hb = New-Object System.Drawing.Drawing2D.PathGradientBrush($hp)
+    $hb.CenterPoint = New-Object System.Drawing.PointF($cx * 0.8, $cy * 0.7)
+    $hb.CenterColor = [System.Drawing.Color]::FromArgb(70, 190, 255)
+    $hb.SurroundColors = @([System.Drawing.Color]::FromArgb(15, 30, 60))
+    $g.FillPath($hb, $hp)
+
+    $gp = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(25, 120, 220), 3)
+    $g.DrawPolygon($gp, $pts)
+    $bp = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(110, 195, 255), 1.2)
+    $g.DrawPolygon($bp, $pts)
+
+    $fs2 = [Math]::Round($W * 0.4)
+    $fn2 = New-Object System.Drawing.Font("Consolas", $fs2, 'Bold')
+    $sf2 = New-Object System.Drawing.StringFormat
+    $sf2.Alignment = 'Center'; $sf2.LineAlignment = 'Center'
+    $gw = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(30, 120, 200))
+    $g.DrawString("G", $fn2, $gw, $cx + 1, $cy + 2, $sf2)
+    $tw = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+        (New-Object System.Drawing.PointF(0, $H * 0.3)), (New-Object System.Drawing.PointF($W, $H * 0.7)),
+        [System.Drawing.Color]::White, [System.Drawing.Color]::FromArgb(160, 220, 255))
+    $g.DrawString("G", $fn2, $tw, $cx, $cy + 1, $sf2)
+
+    $cl = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(35, 100, 180), 1)
+    $g.DrawLine($cl, $cx - $rad, $cy, $cx - $rad - 10, $cy)
+    $g.DrawLine($cl, $cx + $rad, $cy, $cx + $rad + 10, $cy)
+    $g.DrawLine($cl, $cx, $cy - $rad, $cx, $cy - $rad - 8)
+    $g.DrawLine($cl, $cx, $cy + $rad, $cx, $cy + $rad + 8)
+    $dt = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(80, 180, 255))
+    foreach ($pos in @(@($cx - $rad - 13, $cy - 2), @($cx + $rad + 9, $cy - 2),
+                       @($cx - 2, $cy - $rad - 11), @($cx - 2, $cy + $rad + 7))) {
+        $g.FillEllipse($dt, $pos[0], $pos[1], 4, 4)
+    }
+
+    $g.Dispose()
+    return $bmp
+}
+
+# ============================================================
+#  SYSTEM INFO GATHERING
+# ============================================================
+$script:SysInfo = @{}
+try { $c = (Get-WmiObject Win32_Processor | Select-Object -First 1).Name; $script:SysInfo.CPU = if ($c.Length -gt 38) { $c.Substring(0, 35) + "..." } else { $c } } catch { $script:SysInfo.CPU = "N/A" }
+try { $r = [Math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1); $script:SysInfo.RAM = "${r}GB" } catch { $script:SysInfo.RAM = "N/A" }
+try { $g2 = (Get-WmiObject Win32_VideoController | Select-Object -First 1).Name; $script:SysInfo.GPU = if ($g2.Length -gt 38) { $g2.Substring(0, 35) + "..." } else { $g2 } } catch { $script:SysInfo.GPU = "N/A" }
+try { $o = (Get-WmiObject Win32_OperatingSystem).Caption; $script:SysInfo.OS = $o.Trim() } catch { $script:SysInfo.OS = "N/A" }
+
+# ============================================================
+#  GENERATE ASSETS
+# ============================================================
+$script:AppIcon = New-AppIcon -Size 64
+$script:LogoBmp = New-LogoImage -W 68 -H 68
+
+# ============================================================
+# [01] Kernel + Timer (TSC)
 # ============================================================
 $Tweak_KernelTimer = {
     bcdedit /deletevalue useplatformclock 2>$null | Out-Null
@@ -46,21 +163,20 @@ $Tweak_TimerResolution = {
 
 # ============================================================
 # [03] Process Priority
-# FIX: ลบ Win32PrioritySeparation (ย้ายไป [70] ที่เดียว)
-# FIX: ลบ EnablePrefetcher/EnableSuperfetch (ย้ายไป [70])
 # ============================================================
 $Tweak_ProcessPriority = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control" /v SvcHostSplitThresholdInKB /t REG_DWORD /d 33554432 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v SystemResponsiveness /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile" /v NetworkThrottlingIndex /t REG_DWORD /d 4294967295 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Executive" /v AdditionalCriticalWorkerThreads /t REG_DWORD /d 2 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v Priority /t REG_DWORD /d 6 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Background Only" /t REG_SZ /d False /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
+    $gp = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games"
+    reg add "$gp" /v "GPU Priority" /t REG_DWORD /d 8 /f | Out-Null
+    reg add "$gp" /v Priority /t REG_DWORD /d 6 /f | Out-Null
+    reg add "$gp" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
+    reg add "$gp" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
+    reg add "$gp" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$gp" /v "Background Only" /t REG_SZ /d False /f | Out-Null
+    reg add "$gp" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\501a4d13-42af-4429-9fd1-a8218c268e20\ee12f2c1-98bb-455b-9e09-ae4c1e16cb45" /v Attributes /t REG_DWORD /d 2 /f | Out-Null
 }
 
@@ -81,7 +197,6 @@ $Tweak_IrqMsiMode = {
 
 # ============================================================
 # [05] Memory Management
-# FIX: ลบ EnablePrefetcher/EnableSuperfetch (ย้ายไป [70] ที่เดียว)
 # ============================================================
 $Tweak_MemoryManagement = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v SystemCacheDirtyPageThreshold /t REG_DWORD /d 0 /f | Out-Null
@@ -94,7 +209,6 @@ $Tweak_MemoryManagement = {
 
 # ============================================================
 # [06] Storage
-# FIX: ลบ fsutil disablelastaccess (ย้ายไป [69] ที่เดียว)
 # ============================================================
 $Tweak_Storage = {
     fsutil behavior set disable8dot3 1 | Out-Null
@@ -197,19 +311,18 @@ $Tweak_GpuDisplay = {
 # [14] Audio Latency
 # ============================================================
 $Tweak_AudioLatency = {
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "Background Only" /t REG_SZ /d False /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "GPU Priority" /t REG_DWORD /d 8 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v Priority /t REG_DWORD /d 1 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
+    $ap = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio"
+    reg add "$ap" /v Affinity /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$ap" /v "Background Only" /t REG_SZ /d False /f | Out-Null
+    reg add "$ap" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
+    reg add "$ap" /v "GPU Priority" /t REG_DWORD /d 8 /f | Out-Null
+    reg add "$ap" /v Priority /t REG_DWORD /d 1 /f | Out-Null
+    reg add "$ap" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
+    reg add "$ap" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
 }
 
 # ============================================================
 # [15] Network and DNS
-# FIX: ลบ template=custom (ไม่ valid)
-# FIX: ลบ Tcp1323Opts (ย้ายไป [56] ที่เดียว)
 # ============================================================
 $Tweak_NetworkDNS = {
     netsh int tcp set global rss=enabled | Out-Null
@@ -272,10 +385,12 @@ $Tweak_PrivacyTelemetry = {
 # [17] Windows Services
 # ============================================================
 $Tweak_Services = {
-    $disableList = @('DiagTrack','MapsBroker','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','Fax','RetailDemo','RemoteRegistry','WerSvc')
-    foreach ($s in $disableList) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
-    $autoList = @('Audiosrv','AudioEndpointBuilder','Dhcp','NlaSvc','Netman','WlanSvc','RpcSs','EventLog','PlugPlay','LanmanWorkstation','LanmanServer','WSearch')
-    foreach ($s in $autoList) { sc.exe config $s start= auto 2>$null | Out-Null; sc.exe start $s 2>$null | Out-Null }
+    foreach ($s in @('DiagTrack','MapsBroker','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','Fax','RetailDemo','RemoteRegistry','WerSvc')) {
+        sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null
+    }
+    foreach ($s in @('Audiosrv','AudioEndpointBuilder','Dhcp','NlaSvc','Netman','WlanSvc','RpcSs','EventLog','PlugPlay','LanmanWorkstation','LanmanServer','WSearch')) {
+        sc.exe config $s start= auto 2>$null | Out-Null; sc.exe start $s 2>$null | Out-Null
+    }
 }
 
 # ============================================================
@@ -294,8 +409,7 @@ $Tweak_JunkCleanup = {
 }
 
 # ============================================================
-# [19] Interrupt Affinity (was [21])
-# GPU = Core 1, NIC = Core 2, USB = Core 3
+# [19] Interrupt Affinity — GPU=Core1, NIC=Core2, USB=Core3
 # ============================================================
 $Tweak_InterruptAffinity = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Enum\PCI' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -352,18 +466,15 @@ $Tweak_HyperV = {
 # ============================================================
 $Tweak_TimerResRuntime = {
     Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
+using System;using System.Runtime.InteropServices;
 public class WinTimer {
-    [DllImport("ntdll.dll")]
-    public static extern uint NtSetTimerResolution(uint DesiredResolution, bool SetResolution, out uint CurrentResolution);
-    [DllImport("ntdll.dll")]
-    public static extern uint NtQueryTimerResolution(out uint MinimumResolution, out uint MaximumResolution, out uint CurrentResolution);
+    [DllImport("ntdll.dll")]public static extern uint NtSetTimerResolution(uint DesiredResolution,bool SetResolution,out uint CurrentResolution);
+    [DllImport("ntdll.dll")]public static extern uint NtQueryTimerResolution(out uint MinimumResolution,out uint MaximumResolution,out uint CurrentResolution);
 }
 "@ -ErrorAction SilentlyContinue
-    $min = 0; $max = 0; $cur = 0
-    [WinTimer]::NtQueryTimerResolution([ref]$min, [ref]$max, [ref]$cur) | Out-Null
-    [WinTimer]::NtSetTimerResolution($max, $true, [ref]$cur) | Out-Null
+    $min=0;$max=0;$cur=0
+    [WinTimer]::NtQueryTimerResolution([ref]$min,[ref]$max,[ref]$cur) | Out-Null
+    [WinTimer]::NtSetTimerResolution($max,$true,[ref]$cur) | Out-Null
     $helperPath = "$env:SystemRoot\System32\GOATX_TimerRes.ps1"
     @'
 Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class W{[DllImport("ntdll.dll")]public static extern uint NtSetTimerResolution(uint d,bool s,out uint c);}'
@@ -384,9 +495,7 @@ $Tweak_SpectreMeltdown = {
 # ============================================================
 # [24] Memory Compression
 # ============================================================
-$Tweak_MemCompression = {
-    Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue
-}
+$Tweak_MemCompression = { Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue }
 
 # ============================================================
 # [25] NVIDIA Low Latency
@@ -395,20 +504,21 @@ $Tweak_NvidiaLowLatency = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | Where-Object {
         (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -ErrorAction SilentlyContinue).DriverDesc -match 'NVIDIA'
     } | ForEach-Object {
-        Set-ItemProperty -Path $_.PSPath -Name 'PerfLevelSrc' -Value 0x2222 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'PowerMizerEnable' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'PowerMizerLevel' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'PowerMizerLevelAC' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'DisableDynamicPstate' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'D3PCLatency' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'F1TransitionLatency' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'RMEnableVblankSynchronization' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'EnableMidBufferPreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'EnableMidGfxPreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'EnableMidBufferPreemptionForHighTdrTimeout' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'EnableCEPreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'EnableDeepIdlePreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'EnableAsyncMidBufferPreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        $p = $_.PSPath
+        Set-ItemProperty -Path $p -Name 'PerfLevelSrc' -Value 0x2222 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'PowerMizerEnable' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'PowerMizerLevel' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'PowerMizerLevelAC' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'DisableDynamicPstate' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'D3PCLatency' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'F1TransitionLatency' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'RMEnableVblankSynchronization' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'EnableMidBufferPreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'EnableMidGfxPreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'EnableMidBufferPreemptionForHighTdrTimeout' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'EnableCEPreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'EnableDeepIdlePreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'EnableAsyncMidBufferPreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -419,10 +529,11 @@ $Tweak_NvidiaShader = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | Where-Object {
         (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -ErrorAction SilentlyContinue).DriverDesc -match 'NVIDIA'
     } | ForEach-Object {
-        Set-ItemProperty -Path $_.PSPath -Name 'RMEnableAppSpecificProfile' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'ShaderCache' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'RMFrmForceMaxFramesToRender' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'RMEnableReBar' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        $p = $_.PSPath
+        Set-ItemProperty -Path $p -Name 'RMEnableAppSpecificProfile' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'ShaderCache' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'RMFrmForceMaxFramesToRender' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'RMEnableReBar' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -472,7 +583,7 @@ $Tweak_DeliveryOptimization = {
 # ============================================================
 $Tweak_DevicePower = {
     Get-WmiObject -Class Win32_USBHub -ErrorAction SilentlyContinue | ForEach-Object {
-        $pnpId = $_.PNPDeviceID; $regPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnpId\Device Parameters"
+        $regPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($_.PNPDeviceID)\Device Parameters"
         if (Test-Path "$regPath\WDF") { Set-ItemProperty -Path "$regPath\WDF" -Name 'IdleInWorkingState' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue }
     }
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\stornvme\Parameters\Device" /v IdlePowerStateEnabled /t REG_DWORD /d 0 /f 2>$null | Out-Null
@@ -492,9 +603,7 @@ $Tweak_GpuCacheCleanup = {
 # ============================================================
 # [33] MPO Disable
 # ============================================================
-$Tweak_MPODisable = {
-    reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
-}
+$Tweak_MPODisable = { reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null }
 
 # ============================================================
 # [34] PCI-E ASPM
@@ -520,43 +629,40 @@ $Tweak_ConnectedStandby = {
 # [36] Telemetry Tasks
 # ============================================================
 $Tweak_TelemetryTasks = {
-    $tasks = @(
-        '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser'
-        '\Microsoft\Windows\Application Experience\ProgramDataUpdater'
-        '\Microsoft\Windows\Customer Experience Improvement Program\Consolidator'
-        '\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip'
-        '\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector'
-        '\Microsoft\Windows\Feedback\Siuf\DmClient'
-        '\Microsoft\Windows\Maps\MapsToastTask'
-        '\Microsoft\Windows\Maps\MapsUpdateTask'
-        '\Microsoft\Windows\Windows Error Reporting\QueueReporting'
-        '\Microsoft\Windows\CloudExperienceHost\CreateObjectTask'
-        '\Microsoft\Windows\PI\Sqm-Tasks'
-        '\Microsoft\Windows\Maintenance\WinSAT'
-        '\Microsoft\Windows\Autochk\Proxy'
-        '\Microsoft\Windows\Registry\RegIdleBackup'
-        '\Microsoft\Windows\MemoryDiagnostic\ProcessMemoryDiagnosticEvents'
-        '\Microsoft\Windows\MemoryDiagnostic\RunFullMemoryDiagnostic'
-        '\Microsoft\Windows\Mobile Broadband Accounts\MNO Metadata Parser'
+    foreach ($t in @(
+        '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser',
+        '\Microsoft\Windows\Application Experience\ProgramDataUpdater',
+        '\Microsoft\Windows\Customer Experience Improvement Program\Consolidator',
+        '\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip',
+        '\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector',
+        '\Microsoft\Windows\Feedback\Siuf\DmClient',
+        '\Microsoft\Windows\Maps\MapsToastTask','\Microsoft\Windows\Maps\MapsUpdateTask',
+        '\Microsoft\Windows\Windows Error Reporting\QueueReporting',
+        '\Microsoft\Windows\CloudExperienceHost\CreateObjectTask',
+        '\Microsoft\Windows\PI\Sqm-Tasks','\Microsoft\Windows\Maintenance\WinSAT',
+        '\Microsoft\Windows\Autochk\Proxy','\Microsoft\Windows\Registry\RegIdleBackup',
+        '\Microsoft\Windows\MemoryDiagnostic\ProcessMemoryDiagnosticEvents',
+        '\Microsoft\Windows\MemoryDiagnostic\RunFullMemoryDiagnostic',
+        '\Microsoft\Windows\Mobile Broadband Accounts\MNO Metadata Parser',
         '\Microsoft\Windows\Windows Filtering Platform\BfeOnServiceStartTypeChange'
-    )
-    foreach ($t in $tasks) { Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
+    )) { Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
 }
 
 # ============================================================
 # [37] Windows Ads and Tips
 # ============================================================
 $Tweak_WindowsAdsTips = {
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SoftLandingEnabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v RotatingLockScreenOverlayEnabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v RotatingLockScreenEnabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-310093Enabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-338393Enabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-353694Enabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager" /v SubscribedContent-353696Enabled /t REG_DWORD /d 0 /f | Out-Null
+    $cdm = "HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+    reg add "$cdm" /v SystemPaneSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$cdm" /v SoftLandingEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$cdm" /v RotatingLockScreenOverlayEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$cdm" /v RotatingLockScreenEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$cdm" /v SubscribedContent-338389Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$cdm" /v SubscribedContent-310093Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$cdm" /v SubscribedContent-338388Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$cdm" /v SubscribedContent-338393Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$cdm" /v SubscribedContent-353694Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$cdm" /v SubscribedContent-353696Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowSyncProviderNotifications /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowInfoBar /t REG_DWORD /d 0 /f | Out-Null
@@ -568,22 +674,18 @@ $Tweak_WindowsAdsTips = {
 # [38] Additional Services
 # ============================================================
 $Tweak_AdditionalServices = {
-    $extraDisable = @(
-        'WpnService','WaaSMedicSvc','SSDPSRV','fdPHost','FDResPub',
-        'CDPSvc','CDPUserSvc','PcaSvc','TroubleShootingSvc','DusmSvc',
-        'InstallService','PhoneSvc','TapiSrv','SEMgrSvc','SharedAccess',
-        'RemoteAccess','lmhosts','WpcMonSvc','ScDeviceEnum','SCardSvr',
-        'MessagingService','PimIndexMaintenanceSvc','OneSyncSvc','AJRouter'
-    )
-    foreach ($s in $extraDisable) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
+    foreach ($s in @('WpnService','WaaSMedicSvc','SSDPSRV','fdPHost','FDResPub','CDPSvc','CDPUserSvc','PcaSvc',
+                     'TroubleShootingSvc','DusmSvc','InstallService','PhoneSvc','TapiSrv','SEMgrSvc','SharedAccess',
+                     'RemoteAccess','lmhosts','WpcMonSvc','ScDeviceEnum','SCardSvr','MessagingService',
+                     'PimIndexMaintenanceSvc','OneSyncSvc','AJRouter')) {
+        sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null
+    }
 }
 
 # ============================================================
 # [39] Overlay Killer (GameBar only)
 # ============================================================
-$Tweak_OverlayKiller = {
-    reg add "HKCU\Software\Microsoft\GameBar" /v UseNexusForGameBarEnabled /t REG_DWORD /d 0 /f | Out-Null
-}
+$Tweak_OverlayKiller = { reg add "HKCU\Software\Microsoft\GameBar" /v UseNexusForGameBarEnabled /t REG_DWORD /d 0 /f | Out-Null }
 
 # ============================================================
 # [40] Network Noise
@@ -603,12 +705,14 @@ $Tweak_NetworkNoise = {
 # [41] Diagnostic Services
 # ============================================================
 $Tweak_DiagnosticServices = {
-    $diagList = @('DPS','WdiServiceHost','WdiSystemHost','diagnosticshub.standardcollector.service','diagsvc','TroubleShootingSvc')
-    foreach ($s in $diagList) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
-    reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v Disabled /t REG_DWORD /d 1 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v LoggingDisabled /t REG_DWORD /d 1 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v AutoApproveOSDumps /t REG_DWORD /d 0 /f | Out-Null
+    foreach ($s in @('DPS','WdiServiceHost','WdiSystemHost','diagnosticshub.standardcollector.service','diagsvc','TroubleShootingSvc')) {
+        sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null
+    }
+    $wer = "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting"
+    reg add "$wer" /v Disabled /t REG_DWORD /d 1 /f | Out-Null
+    reg add "$wer" /v DontShowUI /t REG_DWORD /d 1 /f | Out-Null
+    reg add "$wer" /v LoggingDisabled /t REG_DWORD /d 1 /f | Out-Null
+    reg add "$wer" /v AutoApproveOSDumps /t REG_DWORD /d 0 /f | Out-Null
 }
 
 # ============================================================
@@ -625,12 +729,10 @@ $Tweak_SystemRestoreOff = {
 # [43] Additional Services v2
 # ============================================================
 $Tweak_AdditionalServices2 = {
-    $extraDisable2 = @(
-        'iphlpsvc','WinRM','wercplsupport','WerSvc','WMPNetworkSvc',
-        'UevAgentService','DsSvc','DialogBlockingService','lfsvc','wisvc',
-        'WalletService','DsRoleSvc','NcaSvc','NcdAutoSetup','icssvc','SEMgrSvc'
-    )
-    foreach ($s in $extraDisable2) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
+    foreach ($s in @('iphlpsvc','WinRM','wercplsupport','WerSvc','WMPNetworkSvc','UevAgentService','DsSvc',
+                     'DialogBlockingService','lfsvc','wisvc','WalletService','DsRoleSvc','NcaSvc','NcdAutoSetup','icssvc','SEMgrSvc')) {
+        sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null
+    }
 }
 
 # ============================================================
@@ -653,17 +755,16 @@ $Tweak_SpotlightClipboard = {
 # [45] NVIDIA Telemetry
 # ============================================================
 $Tweak_NvidiaTelemetry = {
-    $nvTasks = @(
-        '\NVIDIA\NvDriverUpdateCheckDaily{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
-        '\NVIDIA\NvTmRep_CrashReport1_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
-        '\NVIDIA\NvTmRep_CrashReport2_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
-        '\NVIDIA\NvTmRep_CrashReport3_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
-        '\NVIDIA\NvTmRep_CrashReport4_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
+    foreach ($t in @(
+        '\NVIDIA\NvDriverUpdateCheckDaily{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}',
+        '\NVIDIA\NvTmRep_CrashReport1_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}',
+        '\NVIDIA\NvTmRep_CrashReport2_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}',
+        '\NVIDIA\NvTmRep_CrashReport3_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}',
+        '\NVIDIA\NvTmRep_CrashReport4_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}',
         '\NVIDIA\NvTmMon_{B2FE1952-0786-46D3-8684-AB2B5E2D3B0A}'
-    )
-    foreach ($t in $nvTasks) { Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
-    $nvTelemetryPath = "HKLM:\SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client"
-    if (Test-Path $nvTelemetryPath) { Set-ItemProperty -Path $nvTelemetryPath -Name 'OptInOrOutPreference' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue }
+    )) { Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
+    $nvPath = "HKLM:\SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client"
+    if (Test-Path $nvPath) { Set-ItemProperty -Path $nvPath -Name 'OptInOrOutPreference' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue }
 }
 
 # ============================================================
@@ -684,13 +785,14 @@ $Tweak_CopilotRecall = {
 # ============================================================
 $Tweak_StorageEdge = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" /v 01 /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v StartupBoostEnabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v BackgroundModeEnabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v EdgeCollectionsEnabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v EdgeSidebarEnabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v HubsSidebarEnabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v EdgeShoppingAssistantEnabled /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge" /v ShowRecommendationsEnabled /t REG_DWORD /d 0 /f | Out-Null
+    $edge = "HKLM\SOFTWARE\Policies\Microsoft\Edge"
+    reg add "$edge" /v StartupBoostEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$edge" /v BackgroundModeEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$edge" /v EdgeCollectionsEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$edge" /v EdgeSidebarEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$edge" /v HubsSidebarEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$edge" /v EdgeShoppingAssistantEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$edge" /v ShowRecommendationsEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\MicrosoftEdge\Main" /v AllowPrelaunch /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\MicrosoftEdge\TabPreloader" /v AllowTabPreloading /t REG_DWORD /d 0 /f | Out-Null
     Stop-Process -Name "msedge" -Force -ErrorAction SilentlyContinue
@@ -711,17 +813,15 @@ $Tweak_BootLoginSpeed = {
 # [49] Autologger Disable
 # ============================================================
 $Tweak_AutologgerDisable = {
-    $loggers = @(
-        'DiagLog','Diagtrack-Listener','Circular Kernel Context Logger',
-        'Microsoft-Windows-Rdp-Graphics-RdpIdd-Trace',
-        'Microsoft-Windows-Application-Experience',
+    foreach ($logger in @('DiagLog','Diagtrack-Listener','Circular Kernel Context Logger',
+        'Microsoft-Windows-Rdp-Graphics-RdpIdd-Trace','Microsoft-Windows-Application-Experience',
         'Microsoft-Windows-Application-Experience-Program-Inventory',
         'Microsoft-Windows-Application-Experience-Program-Telemetry',
         'Microsoft-Windows-Kernel-PnP','Microsoft-Windows-SetupPlatform',
         'Microsoft-Windows-SetupQueue','NetCore','NtfsLog','UBPM',
-        'UserNotPresentTraceSession','WiFiSession','WindowsDefenderAudit'
-    )
-    foreach ($logger in $loggers) { reg add "HKLM\SYSTEM\CurrentControlSet\Control\WMI\Autologger\$logger" /v Start /t REG_DWORD /d 0 /f 2>$null | Out-Null }
+        'UserNotPresentTraceSession','WiFiSession','WindowsDefenderAudit')) {
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\WMI\Autologger\$logger" /v Start /t REG_DWORD /d 0 /f 2>$null | Out-Null
+    }
     reg add "HKLM\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\config" /v AutoConnectAllowedOEM /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting" /v Value /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowAutoConnectToWiFiSenseHotspots" /v Value /t REG_DWORD /d 0 /f | Out-Null
@@ -741,8 +841,7 @@ $Tweak_PagefileOptimize = {
         $newPF.Name = "C:\pagefile.sys"; $newPF.InitialSize = $size; $newPF.MaximumSize = $size; $newPF.Put() | Out-Null
     }
     Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter -and $_.DriveLetter -ne 'C' } | ForEach-Object {
-        $drive = $_.DriveLetter + ":"
-        $obj = Get-WmiObject -Query "SELECT * FROM Win32_Volume WHERE DriveLetter='$drive'"
+        $drive = $_.DriveLetter + ":"; $obj = Get-WmiObject -Query "SELECT * FROM Win32_Volume WHERE DriveLetter='$drive'"
         if ($obj) { $obj.IndexingEnabled = $false; $obj.Put() | Out-Null }
     }
 }
@@ -764,7 +863,7 @@ $Tweak_SmartScreen = {
 # [52] Scheduled Tasks v2
 # ============================================================
 $Tweak_ScheduledTasks2 = {
-    $tasks = @(
+    foreach ($t in @(
         '\Microsoft\Windows\DiskFootprint\Diagnostics','\Microsoft\Windows\DiskFootprint\StorageSense',
         '\Microsoft\Windows\PerfTrack\BackgroundConfigSurveyor','\Microsoft\Windows\Shell\FamilySafetyMonitor',
         '\Microsoft\Windows\Shell\FamilySafetyRefreshTask','\Microsoft\Windows\Shell\IndexerAutomaticMaintenance',
@@ -775,15 +874,13 @@ $Tweak_ScheduledTasks2 = {
         '\Microsoft\Office\Office ClickToRun Service Monitor',
         '\MicrosoftEdgeUpdateTaskMachineCore','\MicrosoftEdgeUpdateTaskMachineUA',
         '\Microsoft\EdgeUpdate\EdgeUpdateTaskMachineCore','\Microsoft\EdgeUpdate\EdgeUpdateTaskMachineUA'
-    )
-    foreach ($t in $tasks) { Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
+    )) { Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
     sc.exe stop edgeupdate 2>$null | Out-Null; sc.exe config edgeupdate start= disabled 2>$null | Out-Null
     sc.exe stop edgeupdatem 2>$null | Out-Null; sc.exe config edgeupdatem start= disabled 2>$null | Out-Null
 }
 
 # ============================================================
 # [53] LSO + RSS Queues
-# FIX: ลบ Jumbo Frames (เสี่ยงทำให้เน็ตพังถ้า switch/router ไม่รองรับ)
 # ============================================================
 $Tweak_LSOandRSS = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
@@ -798,7 +895,6 @@ $Tweak_LSOandRSS = {
 
 # ============================================================
 # [54] TCP Window / BDP Tuning
-# FIX: Tcp1323Opts=1 (window scaling only, no timestamps)
 # ============================================================
 $Tweak_TCPWindowTuning = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v Tcp1323Opts /t REG_DWORD /d 1 /f | Out-Null
@@ -853,8 +949,6 @@ $Tweak_UDPBuffer = {
 
 # ============================================================
 # [58] NIC Flow + RSS Core
-# FIX: RSS BaseProc=2 (core 1 = GPU interrupt, core 2 = NIC)
-# FIX: ปิด IPv6 binding
 # ============================================================
 $Tweak_NICFlowControl = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
@@ -898,13 +992,16 @@ $Tweak_NICPowerDeep = {
 # ============================================================
 $Tweak_DNSCache = {
     ipconfig /flushdns | Out-Null; nbtstat -R | Out-Null; nbtstat -RR | Out-Null; arp -d * 2>$null | Out-Null
-    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v MaxCacheEntryTtlLimit /t REG_DWORD /d 86400 /f | Out-Null
-    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v MaxSOACacheEntryTtlLimit /t REG_DWORD /d 120 /f | Out-Null
-    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v NegativeCacheTime /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v NetFailureCacheTime /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v NegativeSOACacheTime /t REG_DWORD /d 0 /f | Out-Null
+    $dns = "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters"
+    reg add "$dns" /v MaxCacheEntryTtlLimit /t REG_DWORD /d 86400 /f | Out-Null
+    reg add "$dns" /v MaxSOACacheEntryTtlLimit /t REG_DWORD /d 120 /f | Out-Null
+    reg add "$dns" /v NegativeCacheTime /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$dns" /v NetFailureCacheTime /t REG_DWORD /d 0 /f | Out-Null
+    reg add "$dns" /v NegativeSOACacheTime /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v EnableMulticast /t REG_DWORD /d 0 /f | Out-Null
-    Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\services\NetBT\Parameters\Interfaces' -ErrorAction SilentlyContinue | ForEach-Object { Set-ItemProperty -Path $_.PSPath -Name NetbiosOptions -Value 2 -ErrorAction SilentlyContinue }
+    Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\services\NetBT\Parameters\Interfaces' -ErrorAction SilentlyContinue | ForEach-Object {
+        Set-ItemProperty -Path $_.PSPath -Name NetbiosOptions -Value 2 -ErrorAction SilentlyContinue
+    }
 }
 
 # ============================================================
@@ -920,7 +1017,6 @@ $Tweak_TCPKeepAlive = {
 
 # ============================================================
 # [63] MMCSS Deep Tuning
-# (formerly [65] — replaces the removed [19] Display Post Processing)
 # ============================================================
 $Tweak_MMCSSDeep = {
     $mmcss = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
@@ -960,13 +1056,14 @@ $Tweak_NvidiaProfile = {
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | Where-Object {
         (Get-ItemProperty $_.PSPath -Name 'DriverDesc' -ErrorAction SilentlyContinue).DriverDesc -match 'NVIDIA'
     } | ForEach-Object {
-        Set-ItemProperty -Path $_.PSPath -Name 'RMEnableAppSpecificProfile' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'LowLatencyMode' -Value 2 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'RMFrmForceMaxFramesToRender' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'TextureQuality' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'PerfLevelSrc' -Value 0x2222 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'RmEnableExtSs' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-        Set-ItemProperty -Path $_.PSPath -Name 'RMForceGenSpeed' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        $p = $_.PSPath
+        Set-ItemProperty -Path $p -Name 'RMEnableAppSpecificProfile' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'LowLatencyMode' -Value 2 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'RMFrmForceMaxFramesToRender' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'TextureQuality' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'PerfLevelSrc' -Value 0x2222 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'RmEnableExtSs' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path $p -Name 'RMForceGenSpeed' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
     }
     $nvGlobal = "HKLM:\SOFTWARE\NVIDIA Corporation\Global\NVTweak"
     if (-not (Test-Path $nvGlobal)) { New-Item -Path $nvGlobal -Force -ErrorAction SilentlyContinue | Out-Null }
@@ -979,12 +1076,12 @@ $Tweak_NvidiaProfile = {
 # ============================================================
 $Tweak_USBPowerDeep = {
     Get-WmiObject -Class Win32_USBHub -ErrorAction SilentlyContinue | ForEach-Object {
-        $pnpId = $_.PNPDeviceID; $regPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnpId\Device Parameters"
+        $regPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($_.PNPDeviceID)\Device Parameters"
         if (Test-Path "$regPath\WDF") { Set-ItemProperty -Path "$regPath\WDF" -Name 'IdleInWorkingState' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue }
         if (Test-Path "$regPath\USB") { Set-ItemProperty -Path "$regPath\USB" -Name 'DeviceIdleEnabled' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue }
     }
     Get-WmiObject -Class Win32_USBController -ErrorAction SilentlyContinue | ForEach-Object {
-        $pnpId = $_.PNPDeviceID; $regPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$pnpId\Device Parameters"
+        $regPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($_.PNPDeviceID)\Device Parameters"
         if (Test-Path "$regPath\WDF") { Set-ItemProperty -Path "$regPath\WDF" -Name 'IdleInWorkingState' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue }
     }
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\USB" /v DisableSelectiveSuspend /t REG_DWORD /d 1 /f | Out-Null
@@ -1004,19 +1101,19 @@ $Tweak_NTFSDeep = {
 
 # ============================================================
 # [67] CPU Scheduling Deep
-# FIX: ย้าย Prefetcher/Superfetch logic ทั้งหมดมาที่นี่ (single source)
 # ============================================================
 $Tweak_CPUScheduling = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQ8Priority /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32PrioritySeparation /t REG_DWORD /d 38 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v SecondLevelDataCache /t REG_DWORD /d 0 /f | Out-Null
     $hasHDD = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'HDD' }
+    $pfPath = "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters"
     if ($hasHDD) {
-        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnablePrefetcher /t REG_DWORD /d 3 /f | Out-Null
-        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
+        reg add "$pfPath" /v EnablePrefetcher /t REG_DWORD /d 3 /f | Out-Null
+        reg add "$pfPath" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
     } else {
-        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnablePrefetcher /t REG_DWORD /d 0 /f | Out-Null
-        reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
+        reg add "$pfPath" /v EnablePrefetcher /t REG_DWORD /d 0 /f | Out-Null
+        reg add "$pfPath" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
     }
 }
 
@@ -1053,8 +1150,8 @@ $Tweak_NVMeDeep = {
 # [70] LargeSystemCache + IoPageLockLimit
 # ============================================================
 $Tweak_LargeSystemCache = {
-    $ram = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
-    if ($ram -ge 16) { reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v LargeSystemCache /t REG_DWORD /d 1 /f | Out-Null }
+    $ramGB = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
+    if ($ramGB -ge 16) { reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v LargeSystemCache /t REG_DWORD /d 1 /f | Out-Null }
     else { reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v LargeSystemCache /t REG_DWORD /d 0 /f | Out-Null }
     $ramMB = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1MB)
     $ioLock = [math]::Round($ramMB * 0.75 * 4096)
@@ -1065,12 +1162,10 @@ $Tweak_LargeSystemCache = {
 # [71] Misc Services
 # ============================================================
 $Tweak_MiscServices = {
-    sc.exe stop Spooler 2>$null | Out-Null; sc.exe config Spooler start= disabled 2>$null | Out-Null
-    sc.exe stop SessionEnv 2>$null | Out-Null; sc.exe config SessionEnv start= disabled 2>$null | Out-Null
-    sc.exe stop TermService 2>$null | Out-Null; sc.exe config TermService start= disabled 2>$null | Out-Null
+    foreach ($pair in @(@('Spooler','disabled'),@('SessionEnv','disabled'),@('TermService','disabled'),@('lfsvc','disabled'),@('WalletService','disabled'))) {
+        sc.exe stop $pair[0] 2>$null | Out-Null; sc.exe config $pair[0] start= $pair[1] 2>$null | Out-Null
+    }
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server" /v fDenyTSConnections /t REG_DWORD /d 1 /f | Out-Null
-    sc.exe stop lfsvc 2>$null | Out-Null; sc.exe config lfsvc start= disabled 2>$null | Out-Null
-    sc.exe stop WalletService 2>$null | Out-Null; sc.exe config WalletService start= disabled 2>$null | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\CDP" /v RomeSdkConsumerUserSettings /t REG_DWORD /d 0 /f | Out-Null
 }
 
@@ -1078,19 +1173,14 @@ $Tweak_MiscServices = {
 # [72] UWP Background Disable
 # ============================================================
 $Tweak_UWPBackgroundDisable = {
-    $uwpDisable = @(
-        'Microsoft.Windows.Photos_8wekyb3d8bbwe','Microsoft.ZuneVideo_8wekyb3d8bbwe',
-        'Microsoft.BingNews_8wekyb3d8bbwe','Microsoft.BingWeather_8wekyb3d8bbwe',
-        'Microsoft.GetHelp_8wekyb3d8bbwe','Microsoft.Getstarted_8wekyb3d8bbwe',
-        'Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe','Microsoft.People_8wekyb3d8bbwe',
+    foreach ($app in @('Microsoft.Windows.Photos_8wekyb3d8bbwe','Microsoft.ZuneVideo_8wekyb3d8bbwe',
+        'Microsoft.BingNews_8wekyb3d8bbwe','Microsoft.BingWeather_8wekyb3d8bbwe','Microsoft.GetHelp_8wekyb3d8bbwe',
+        'Microsoft.Getstarted_8wekyb3d8bbwe','Microsoft.MicrosoftOfficeHub_8wekyb3d8bbwe','Microsoft.People_8wekyb3d8bbwe',
         'Microsoft.SkypeApp_kzf8qxf38zg5c','Microsoft.MicrosoftSolitaireCollection_8wekyb3d8bbwe',
-        'Microsoft.WindowsFeedbackHub_8wekyb3d8bbwe','Microsoft.Xbox.TCUI_8wekyb3d8bbwe',
-        'Microsoft.XboxApp_8wekyb3d8bbwe','Microsoft.XboxGameOverlay_8wekyb3d8bbwe',
-        'Microsoft.XboxGamingOverlay_8wekyb3d8bbwe','Microsoft.XboxIdentityProvider_8wekyb3d8bbwe',
-        'Microsoft.YourPhone_8wekyb3d8bbwe','Microsoft.WindowsMaps_8wekyb3d8bbwe',
-        'Microsoft.Messaging_8wekyb3d8bbwe','Microsoft.WindowsSoundRecorder_8wekyb3d8bbwe'
-    )
-    foreach ($app in $uwpDisable) {
+        'Microsoft.WindowsFeedbackHub_8wekyb3d8bbwe','Microsoft.Xbox.TCUI_8wekyb3d8bbwe','Microsoft.XboxApp_8wekyb3d8bbwe',
+        'Microsoft.XboxGameOverlay_8wekyb3d8bbwe','Microsoft.XboxGamingOverlay_8wekyb3d8bbwe',
+        'Microsoft.XboxIdentityProvider_8wekyb3d8bbwe','Microsoft.YourPhone_8wekyb3d8bbwe',
+        'Microsoft.WindowsMaps_8wekyb3d8bbwe','Microsoft.Messaging_8wekyb3d8bbwe','Microsoft.WindowsSoundRecorder_8wekyb3d8bbwe')) {
         $appPath = "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications\$app"
         reg add "$appPath" /v Disabled /t REG_DWORD /d 1 /f 2>$null | Out-Null
         reg add "$appPath" /v DisabledByUser /t REG_DWORD /d 1 /f 2>$null | Out-Null
@@ -1101,8 +1191,9 @@ $Tweak_UWPBackgroundDisable = {
 # [73] ETW Session Disable
 # ============================================================
 $Tweak_ETWDisable = {
-    $etwSessions = @('DiagLog','Diagtrack-Listener','WiFiSession','UserNotPresentTraceSession','NtfsLog')
-    foreach ($session in $etwSessions) { reg add "HKLM\SYSTEM\CurrentControlSet\Control\WMI\Autologger\$session" /v Start /t REG_DWORD /d 0 /f 2>$null | Out-Null }
+    foreach ($s in @('DiagLog','Diagtrack-Listener','WiFiSession','UserNotPresentTraceSession','NtfsLog')) {
+        reg add "HKLM\SYSTEM\CurrentControlSet\Control\WMI\Autologger\$s" /v Start /t REG_DWORD /d 0 /f 2>$null | Out-Null
+    }
 }
 
 # ============================================================
@@ -1125,7 +1216,7 @@ $Tweak_DWMOptimize = {
 }
 
 # ============================================================
-# MASTER TABLE — 75 TWEAKS (removed [19] Display Post + [67] PowerPlan)
+#  MASTER TWEAK TABLE — 75 TWEAKS
 # ============================================================
 $AllTweaks = [ordered]@{
     "[01] Kernel + Timer (TSC)"        = $Tweak_KernelTimer
@@ -1205,120 +1296,267 @@ $AllTweaks = [ordered]@{
     "[75] DWM Optimization"            = $Tweak_DWMOptimize
 }
 
+# ============================================================
+#  GUI STATE
+# ============================================================
+$script:FormW = 520; $script:FormH = 300
 $script:selectedIndex = 0
 $script:isRunning     = $false
+$script:progress      = 0.0
+$script:statusText    = ""
 $script:optionCount   = 2
 $script:labelControls = @()
 $script:errorLog      = @()
 $script:options = @(
-    @{ Label = "[1] High"; Action = "high" }
-    @{ Label = "[2] Exit"; Action = "exit" }
+    @{ Label = "[1] High Performance"; Action = "high" }
+    @{ Label = "[2] Exit";            Action = "exit" }
 )
 
-$script:GradBright = @(
-    [System.Drawing.Color]::FromArgb(80, 200, 255),
-    [System.Drawing.Color]::FromArgb(180, 120, 255),
-    [System.Drawing.Color]::FromArgb(255, 120, 180)
-)
-$script:GradMid = @(
-    [System.Drawing.Color]::FromArgb(100, 180, 220),
-    [System.Drawing.Color]::FromArgb(160, 130, 220),
-    [System.Drawing.Color]::FromArgb(220, 140, 190)
-)
-$script:GradDim = @(
-    [System.Drawing.Color]::FromArgb(60, 110, 140),
-    [System.Drawing.Color]::FromArgb(110, 70, 140),
-    [System.Drawing.Color]::FromArgb(140, 70, 100)
-)
-$script:GradPos = @(0.0, 0.5, 1.0)
+# ============================================================
+#  PARTICLE SYSTEM — 22 Floating Particles
+# ============================================================
+$script:Particles = @()
+$pColors = @(@(80,200,255),@(100,160,255),@(160,130,255),@(130,200,240),@(200,140,220))
+for ($i = 0; $i -lt 22; $i++) {
+    $pc = $pColors[$i % $pColors.Count]
+    $script:Particles += [PSCustomObject]@{
+        X     = Get-Random -Min 0 -Max $script:FormW
+        Y     = Get-Random -Min 0 -Max $script:FormH
+        VX    = (Get-Random -Min -25 -Max 25) / 100.0
+        VY    = (Get-Random -Min -25 -Max 25) / 100.0
+        Size  = (Get-Random -Min 10 -Max 28) / 10.0
+        Alpha = Get-Random -Min 12 -Max 48
+        R     = $pc[0]; G = $pc[1]; B = $pc[2]
+    }
+}
 
-$clrBg   = [System.Drawing.Color]::Black
-$clrHint = [System.Drawing.Color]::FromArgb(120, 120, 120)
-
+# ============================================================
+#  FORM & PANEL (Double-Buffered)
+# ============================================================
 $form = New-Object System.Windows.Forms.Form
 $form.Text            = "GOATX"
 $form.StartPosition   = "CenterScreen"
-$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
+$form.FormBorderStyle = 'FixedSingle'
 $form.MaximizeBox     = $false
-$form.BackColor       = $clrBg
+$form.BackColor       = [System.Drawing.Color]::FromArgb(10, 10, 18)
 $form.TopMost         = $true
 $form.KeyPreview      = $true
-$form.Opacity         = 0.85
-$form.ClientSize      = New-Object System.Drawing.Size(450, 235)
+$form.ClientSize      = New-Object System.Drawing.Size($script:FormW, $script:FormH)
+$form.Icon            = $script:AppIcon
+$form.Opacity         = 0
 
 $panel = New-Object System.Windows.Forms.Panel
 $panel.Dock      = "Fill"
-$panel.BackColor = $clrBg
+$panel.BackColor = [System.Drawing.Color]::FromArgb(10, 10, 18)
 $panel.TabStop   = $true
+try {
+    $panel.GetType().InvokeMember("DoubleBuffered",
+        [System.Reflection.BindingFlags]::SetProperty -bor
+        [System.Reflection.BindingFlags]::Instance -bor
+        [System.Reflection.BindingFlags]::NonPublic, $null, $panel, $true)
+} catch {}
 $form.Controls.Add($panel)
 
-function New-GradientLabel {
-    param([string]$text,[float]$fontSize,[System.Drawing.FontStyle]$style,[System.Drawing.Color[]]$colors,[float[]]$positions,[int]$x,[int]$y,[int]$w,[int]$h)
-    $pnl = New-Object System.Windows.Forms.Panel
-    $pnl.Size = New-Object System.Drawing.Size($w,$h)
-    $pnl.Location = New-Object System.Drawing.Point($x,$y)
-    $pnl.BackColor = [System.Drawing.Color]::Transparent
-    $pnl.Tag = @{ Text=$text; FontSize=$fontSize; Style=$style; Colors=$colors; Positions=$positions }
-    $pnl.Add_Paint({
-        param($s,$e)
-        $dp=$s.Tag; $font=New-Object System.Drawing.Font("Consolas",$dp.FontSize,$dp.Style)
-        $colors=$dp.Colors; $pos=$dp.Positions
-        $e.Graphics.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $e.Graphics.TextRenderingHint=[System.Drawing.Text.TextRenderingHint]::AntiAlias
-        $brush=New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.Point(0,0)),(New-Object System.Drawing.Point($s.Width,0)),$colors[0],$colors[$colors.Length-1])
-        if($colors.Length-gt 2){$blend=New-Object System.Drawing.Drawing2D.ColorBlend;$blend.Colors=$colors;$blend.Positions=$pos;$brush.InterpolationColors=$blend}
-        $sf=New-Object System.Drawing.StringFormat;$sf.Alignment=[System.Drawing.StringAlignment]::Center;$sf.LineAlignment=[System.Drawing.StringAlignment]::Center
-        $rect=New-Object System.Drawing.RectangleF(0,0,$s.Width,$s.Height)
-        $e.Graphics.DrawString($dp.Text,$font,$brush,$rect,$sf)
-        $brush.Dispose();$font.Dispose();$sf.Dispose()
-    })
-    $panel.Controls.Add($pnl); return $pnl
-}
+# ============================================================
+#  CACHED GDI RESOURCES (Performance)
+# ============================================================
+$script:BgBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+    (New-Object System.Drawing.Point(0, 0)),
+    (New-Object System.Drawing.Point($script:FormW, $script:FormH)),
+    [System.Drawing.Color]::FromArgb(10, 10, 20),
+    [System.Drawing.Color]::FromArgb(18, 14, 32))
 
-New-GradientLabel -text "G O A T X" -fontSize 22 -style ([System.Drawing.FontStyle]::Bold) -colors $script:GradBright -positions $script:GradPos -x 10 -y 20 -w 430 -h 42 | Out-Null
-New-GradientLabel -text "[+] Win10 22H2 Optimized [+]" -fontSize 10 -style ([System.Drawing.FontStyle]::Regular) -colors $script:GradMid -positions $script:GradPos -x 10 -y 66 -w 430 -h 22 | Out-Null
+$script:TitleShadowBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(25, 100, 220))
+$script:TitleGradientBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+    (New-Object System.Drawing.Point(90, 10)),
+    (New-Object System.Drawing.Point(480, 55)),
+    [System.Drawing.Color]::FromArgb(80, 200, 255),
+    [System.Drawing.Color]::FromArgb(200, 140, 255))
+$script:SubtitleBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(130, 130, 170))
+$script:InfoBrush     = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(75, 75, 110))
+$script:ProgBGBrush   = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(22, 22, 38))
+$script:ProgBorderPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(40, 80, 140), 1)
+$script:ProgTextBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(120, 120, 160))
+$script:StatusBrush   = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(100, 180, 255))
 
-$clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)
-$clrOptDim = [System.Drawing.Color]::FromArgb(90, 75, 110)
-$fontOpt = New-Object System.Drawing.Font("Consolas", 12)
-$optStartY = 104; $optSpacing = 32
+# Separator gradient
+$script:SepBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+    (New-Object System.Drawing.Point(18, 0)), (New-Object System.Drawing.Point(502, 0)),
+    [System.Drawing.Color]::FromArgb(0, 60, 120), [System.Drawing.Color]::FromArgb(0, 60, 120))
+$sepBlend = New-Object System.Drawing.Drawing2D.ColorBlend
+$sepBlend.Colors   = @([System.Drawing.Color]::FromArgb(0,60,120), [System.Drawing.Color]::FromArgb(50,100,200), [System.Drawing.Color]::FromArgb(0,60,120))
+$sepBlend.Positions = @(0, 0.5, 1)
+$script:SepBrush.InterpolationColors = $sepBlend
+
+# Fonts
+$script:TitleFont = New-Object System.Drawing.Font("Consolas", 22, 'Bold')
+$script:SubFont   = New-Object System.Drawing.Font("Consolas", 9)
+$script:InfoFont  = New-Object System.Drawing.Font("Consolas", 8)
+$script:ProgFont  = New-Object System.Drawing.Font("Consolas", 8, 'Bold')
+$script:MenuFont  = New-Object System.Drawing.Font("Consolas", 12)
+
+# ============================================================
+#  PAINT HANDLER — Cyberpunk Background + Particles + Info
+# ============================================================
+$panel.Add_Paint({
+    param($s, $e)
+    $g = $e.Graphics
+    $g.SmoothingMode     = 'AntiAlias'
+    $g.TextRenderingHint = 'AntiAliasGridFit'
+    $fw = $script:FormW; $fh = $script:FormH
+
+    # ── Background gradient ──
+    $g.FillRectangle($script:BgBrush, 0, 0, $fw, $fh)
+
+    # ── Particles ──
+    foreach ($p in $script:Particles) {
+        $a = [int]$p.Alpha
+        # Glow halo
+        $ga = [Math]::Max(0, [int]($a * 0.25))
+        $gb = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($ga, $p.R, $p.G, $p.B))
+        $g.FillEllipse($gb, $p.X - $p.Size, $p.Y - $p.Size, $p.Size * 3, $p.Size * 3)
+        $gb.Dispose()
+        # Core dot
+        $cb = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($a, $p.R, $p.G, $p.B))
+        $g.FillEllipse($cb, $p.X, $p.Y, $p.Size, $p.Size)
+        $cb.Dispose()
+    }
+
+    # ── Logo Image ──
+    try { $g.DrawImage($script:LogoBmp, 18, 12, 68, 68) } catch {}
+
+    # ── Title with Glow ──
+    $g.DrawString("G O A T X", $script:TitleFont, $script:TitleShadowBrush, 99, 16)
+    $g.DrawString("G O A T X", $script:TitleFont, $script:TitleGradientBrush, 98, 15)
+
+    # ── Subtitle ──
+    $g.DrawString("Win10 22H2 Ultimate Optimizer  |  75 Tweaks", $script:SubFont, $script:SubtitleBrush, 98, 48)
+
+    # ── System Info ──
+    $g.DrawString("CPU: $($script:SysInfo.CPU)    RAM: $($script:SysInfo.RAM)", $script:InfoFont, $script:InfoBrush, 98, 67)
+    $g.DrawString("GPU: $($script:SysInfo.GPU)", $script:InfoFont, $script:InfoBrush, 98, 80)
+
+    # ── Separator ──
+    $g.FillRectangle($script:SepBrush, 18, 98, 484, 1)
+
+    # ── Progress Bar ──
+    $barX = 20; $barY = 198; $barW = 440; $barH = 12
+    $g.FillRectangle($script:ProgBGBrush, $barX, $barY, $barW, $barH)
+    $fillW = [int]($barW * $script:progress)
+    if ($fillW -gt 0) {
+        $fb = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+            (New-Object System.Drawing.Point($barX, $barY)),
+            (New-Object System.Drawing.Point($barX + $fillW, $barY)),
+            [System.Drawing.Color]::FromArgb(80, 200, 255),
+            [System.Drawing.Color]::FromArgb(180, 120, 255))
+        $g.FillRectangle($fb, $barX, $barY, $fillW, $barH)
+        $fb.Dispose()
+    }
+    $g.DrawRectangle($script:ProgBorderPen, $barX, $barY, $barW, $barH)
+    $g.DrawString("$([int]($script:progress * 100))%", $script:ProgFont, $script:ProgTextBrush, $barX + $barW + 8, $barY - 1)
+
+    # ── Status Text ──
+    if ($script:statusText) {
+        $g.DrawString($script:statusText, $script:InfoFont, $script:StatusBrush, 20, 218)
+    }
+})
+
+# ============================================================
+#  MENU LABELS (Hover-to-Select)
+# ============================================================
+$optStartY = 112; $optSpacing = 36
+$clrOptHi  = [System.Drawing.Color]::FromArgb(130, 190, 255)
+$clrOptDim = [System.Drawing.Color]::FromArgb(65, 60, 95)
+$hintFont  = New-Object System.Drawing.Font("Consolas", 7.5)
 
 for ($i = 0; $i -lt $script:optionCount; $i++) {
     $lbl = New-Object System.Windows.Forms.Label
-    $lbl.Text = if ($i -eq 0) { "> " + $script:options[$i].Label } else { "  " + $script:options[$i].Label }
-    $lbl.Font = $fontOpt; $lbl.ForeColor = if ($i -eq 0) { $clrOptHi } else { $clrOptDim }
-    $lbl.AutoSize = $false; $lbl.Size = New-Object System.Drawing.Size(430, 28)
-    $lbl.Location = New-Object System.Drawing.Point(10, ($optStartY + $i * $optSpacing))
-    $lbl.TextAlign = "MiddleLeft"; $lbl.BackColor = [System.Drawing.Color]::Transparent
-    $lbl.Cursor = [System.Windows.Forms.Cursors]::Hand; $lbl.Tag = $i
-    $lbl.Add_Click({ param($s,$e); if(-not $script:isRunning){ $script:selectedIndex=[int]$s.Tag; Update-Highlight; Execute-Selection } })
-    $panel.Controls.Add($lbl); $script:labelControls += $lbl
+    $lbl.Text      = if ($i -eq 0) { "> " + $script:options[$i].Label } else { "  " + $script:options[$i].Label }
+    $lbl.Font      = $script:MenuFont
+    $lbl.ForeColor = if ($i -eq 0) { $clrOptHi } else { $clrOptDim }
+    $lbl.AutoSize  = $false
+    $lbl.Size      = New-Object System.Drawing.Size(480, 32)
+    $lbl.Location  = New-Object System.Drawing.Point(20, ($optStartY + $i * $optSpacing))
+    $lbl.TextAlign = "MiddleLeft"
+    $lbl.BackColor = [System.Drawing.Color]::Transparent
+    $lbl.Cursor    = [System.Windows.Forms.Cursors]::Hand
+    $lbl.Tag       = $i
+    $lbl.Add_Click({
+        param($sender, $e)
+        if (-not $script:isRunning) {
+            $script:selectedIndex = [int]$sender.Tag
+            Update-Highlight; Execute-Selection
+        }
+    })
+    $lbl.Add_MouseEnter({
+        param($sender, $e)
+        if (-not $script:isRunning) {
+            $script:selectedIndex = [int]$sender.Tag
+            Update-Highlight
+        }
+    })
+    $panel.Controls.Add($lbl)
+    $script:labelControls += $lbl
 }
 
-$fontHint = New-Object System.Drawing.Font("Consolas", 8)
+# Hint
 $hintLbl = New-Object System.Windows.Forms.Label
-$hintLbl.Text = "Arrow keys to navigate, Enter to select"
-$hintLbl.Font = $fontHint; $hintLbl.ForeColor = $clrHint; $hintLbl.AutoSize = $false
-$hintLbl.Size = New-Object System.Drawing.Size(430, 16)
-$hintLbl.Location = New-Object System.Drawing.Point(10, 180)
-$hintLbl.TextAlign = "MiddleCenter"; $hintLbl.BackColor = [System.Drawing.Color]::Transparent
+$hintLbl.Text      = "Arrow keys to navigate  |  Enter to select  |  Esc to exit"
+$hintLbl.Font      = $hintFont
+$hintLbl.ForeColor = [System.Drawing.Color]::FromArgb(40, 40, 60)
+$hintLbl.AutoSize  = $false
+$hintLbl.Size      = New-Object System.Drawing.Size(480, 16)
+$hintLbl.Location  = New-Object System.Drawing.Point(20, 245)
+$hintLbl.TextAlign = "MiddleCenter"
+$hintLbl.BackColor = [System.Drawing.Color]::Transparent
 $panel.Controls.Add($hintLbl)
 
-$hiddenAcceptBtn = New-Object System.Windows.Forms.Button
-$hiddenAcceptBtn.Size = New-Object System.Drawing.Size(1, 1)
-$hiddenAcceptBtn.Location = New-Object System.Drawing.Point(-100, -100)
-$hiddenAcceptBtn.TabStop = $false
-$panel.Controls.Add($hiddenAcceptBtn)
-$form.AcceptButton = $hiddenAcceptBtn
-$hiddenAcceptBtn.Add_Click({ if(-not $script:isRunning){ Execute-Selection } })
+# Accept button (hidden)
+$hiddenBtn = New-Object System.Windows.Forms.Button
+$hiddenBtn.Size     = New-Object System.Drawing.Size(1, 1)
+$hiddenBtn.Location = New-Object System.Drawing.Point(-100, -100)
+$hiddenBtn.TabStop  = $false
+$panel.Controls.Add($hiddenBtn)
+$form.AcceptButton  = $hiddenBtn
+$hiddenBtn.Add_Click({ if (-not $script:isRunning) { Execute-Selection } })
 
+# ============================================================
+#  ANIMATION ENGINE — 20fps Particle Drift
+# ============================================================
+$animTimer = New-Object System.Windows.Forms.Timer
+$animTimer.Interval = 50
+$animTimer.Add_Tick({
+    foreach ($p in $script:Particles) {
+        $p.X += $p.VX; $p.Y += $p.VY
+        if ($p.X -lt -15) { $p.X = $script:FormW + 10 }
+        if ($p.X -gt $script:FormW + 15) { $p.X = -10 }
+        if ($p.Y -lt -15) { $p.Y = $script:FormH + 10 }
+        if ($p.Y -gt $script:FormH + 15) { $p.Y = -10 }
+        $p.Alpha = [Math]::Max(8, [Math]::Min(55, $p.Alpha + (Get-Random -Min -3 -Max 4)))
+    }
+    $panel.Invalidate()
+})
+$animTimer.Start()
+
+# Fade-in timer
+$fadeInTimer = New-Object System.Windows.Forms.Timer
+$fadeInTimer.Interval = 25
+$fadeInTimer.Add_Tick({
+    if ($form.IsDisposed) { $fadeInTimer.Stop(); return }
+    $form.Opacity = [Math]::Min(0.93, $form.Opacity + 0.06)
+    if ($form.Opacity -ge 0.93) { $fadeInTimer.Stop(); $fadeInTimer.Dispose() }
+})
+
+# ============================================================
+#  FUNCTIONS
+# ============================================================
 function Update-Highlight {
     for ($i = 0; $i -lt $script:optionCount; $i++) {
         if ($i -eq $script:selectedIndex) {
-            $script:labelControls[$i].Text = "> " + $script:options[$i].Label
+            $script:labelControls[$i].Text      = "> " + $script:options[$i].Label
             $script:labelControls[$i].ForeColor = $clrOptHi
         } else {
-            $script:labelControls[$i].Text = "  " + $script:options[$i].Label
+            $script:labelControls[$i].Text      = "  " + $script:options[$i].Label
             $script:labelControls[$i].ForeColor = $clrOptDim
         }
     }
@@ -1328,43 +1566,64 @@ function Execute-Selection {
     if ($script:isRunning) { return }
     $action = $script:options[$script:selectedIndex].Action
     if ($action -eq "high") {
-        $script:isRunning = $true; $script:errorLog = @()
+        $script:isRunning = $true
+        $script:errorLog  = @()
         $total = $AllTweaks.Count; $step = 0
         foreach ($key in $AllTweaks.Keys) {
             $step++
-            $script:labelControls[0].Text = "> Running ($step/$total)..."
+            $script:progress   = $step / $total
+            $script:statusText = "Applying: $key"
+            $script:labelControls[0].Text      = "> Running ($step/$total)..."
             $script:labelControls[0].ForeColor = $clrOptHi
             $script:labelControls[0].Refresh()
             [System.Windows.Forms.Application]::DoEvents()
             try { & $AllTweaks[$key] } catch { $script:errorLog += "$key : $($_.Exception.Message)" }
         }
-        if ($script:errorLog.Count -gt 0) {
-            $script:labelControls[0].Text = "> Done - $($script:errorLog.Count) error(s)"
+        $script:progress   = 1.0
+        $script:statusText = if ($script:errorLog.Count -gt 0) {
+            "Done — $($script:errorLog.Count) error(s)"
         } else {
-            $script:labelControls[0].Text = "> Done - All $($AllTweaks.Count) tweaks applied"
+            "All $total optimizations applied successfully!"
+        }
+        $script:labelControls[0].Text = if ($script:errorLog.Count -gt 0) {
+            "> Done — $($script:errorLog.Count) error(s)"
+        } else {
+            "> Complete — All $total tweaks applied"
         }
         $script:labelControls[0].Refresh()
-        try { [System.Media.SystemSounds]::Beep.Play() } catch {}
+        $panel.Invalidate()
         try { [Console]::Beep(1200, 300) } catch {}
-        $timer = New-Object System.Windows.Forms.Timer; $timer.Interval = 1500
-        $timer.Add_Tick({ $timer.Stop(); $timer.Dispose(); $script:isRunning = $false; Update-Highlight })
-        $timer.Start()
-    } else { $form.Close() }
+        $doneTimer = New-Object System.Windows.Forms.Timer
+        $doneTimer.Interval = 2500
+        $doneTimer.Add_Tick({
+            $doneTimer.Stop(); $doneTimer.Dispose()
+            $script:isRunning  = $false
+            $script:progress   = 0.0
+            $script:statusText = ""
+            Update-Highlight
+        })
+        $doneTimer.Start()
+    } else {
+        $form.Close()
+    }
 }
 
-$script:KeyHandler = {
-    param($s, $e)
-    if ($e.KeyCode -eq 'Escape') { if(-not $script:isRunning){ $form.Close() }; return }
+# ============================================================
+#  EVENT HANDLERS
+# ============================================================
+$keyHandler = {
+    param($sender, $e)
+    if ($e.KeyCode -eq 'Escape') { if (-not $script:isRunning) { $form.Close() }; return }
     if ($script:isRunning) { return }
     switch ($e.KeyCode) {
         'Up'   { $script:selectedIndex = ($script:selectedIndex - 1 + $script:optionCount) % $script:optionCount; Update-Highlight; $e.Handled = $true }
         'Down' { $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount; Update-Highlight; $e.Handled = $true }
     }
 }
-$form.Add_KeyDown($script:KeyHandler); $panel.Add_KeyDown($script:KeyHandler)
+$form.Add_KeyDown($keyHandler); $panel.Add_KeyDown($keyHandler)
 
 $scrollHandler = {
-    param($s, $e)
+    param($sender, $e)
     if ($script:isRunning) { return }
     if ($e.Delta -gt 0) { $script:selectedIndex = ($script:selectedIndex - 1 + $script:optionCount) % $script:optionCount }
     else { $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount }
@@ -1373,7 +1632,21 @@ $scrollHandler = {
 $form.Add_MouseWheel($scrollHandler); $panel.Add_MouseWheel($scrollHandler)
 foreach ($ctrl in $panel.Controls) { try { $ctrl.Add_MouseWheel($scrollHandler) } catch {} }
 
-$form.Add_Shown({ $panel.Focus() })
-Update-Highlight
+# Cleanup on close
+$form.Add_FormClosing({
+    $animTimer.Stop(); $animTimer.Dispose()
+    foreach ($d in @($script:BgBrush, $script:TitleShadowBrush, $script:TitleGradientBrush,
+                     $script:SubtitleBrush, $script:InfoBrush, $script:ProgBGBrush, $script:ProgBorderPen,
+                     $script:ProgTextBrush, $script:StatusBrush, $script:SepBrush,
+                     $script:TitleFont, $script:SubFont, $script:InfoFont, $script:ProgFont, $script:MenuFont)) {
+        try { $d.Dispose() } catch {}
+    }
+    try { $script:LogoBmp.Dispose() } catch {}
+})
 
+# ============================================================
+#  LAUNCH
+# ============================================================
+$form.Add_Shown({ $panel.Focus(); $fadeInTimer.Start() })
+Update-Highlight
 [System.Windows.Forms.Application]::Run($form)
