@@ -26,7 +26,6 @@ Add-Type -AssemblyName System.Drawing
 
 # ============================================================
 # [01] Kernel + Timer (TSC optimal for Win10)
-# FIX: ลบ synthetictimers (ไม่ใช่ valid BCD option)
 # ============================================================
 $Tweak_KernelTimer = {
     bcdedit /deletevalue useplatformclock 2>$null | Out-Null
@@ -46,8 +45,6 @@ $Tweak_TimerResolution = {
 
 # ============================================================
 # [03] Process Priority
-# FIX: ลบ Win32PrioritySeparation (ย้ายไป [70] ที่เดียว)
-# FIX: ลบ EnablePrefetcher/EnableSuperfetch (ย้ายไป [70])
 # ============================================================
 $Tweak_ProcessPriority = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control" /v SvcHostSplitThresholdInKB /t REG_DWORD /d 33554432 /f | Out-Null
@@ -81,7 +78,6 @@ $Tweak_IrqMsiMode = {
 
 # ============================================================
 # [05] Memory Management
-# FIX: ลบ EnablePrefetcher/EnableSuperfetch (ย้ายไป [70] ที่เดียว)
 # ============================================================
 $Tweak_MemoryManagement = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v SystemCacheDirtyPageThreshold /t REG_DWORD /d 0 /f | Out-Null
@@ -94,7 +90,6 @@ $Tweak_MemoryManagement = {
 
 # ============================================================
 # [06] Storage
-# FIX: ลบ fsutil disablelastaccess (ย้ายไป [69] ที่เดียว)
 # ============================================================
 $Tweak_Storage = {
     fsutil behavior set disable8dot3 1 | Out-Null
@@ -208,8 +203,6 @@ $Tweak_AudioLatency = {
 
 # ============================================================
 # [15] Network and DNS
-# FIX: ลบ template=custom (ไม่ valid)
-# FIX: ลบ Tcp1323Opts (ย้ายไป [56] ที่เดียว)
 # ============================================================
 $Tweak_NetworkDNS = {
     netsh int tcp set global rss=enabled | Out-Null
@@ -294,7 +287,7 @@ $Tweak_JunkCleanup = {
 }
 
 # ============================================================
-# [19] Interrupt Affinity (was [21])
+# [19] Interrupt Affinity
 # GPU = Core 1, NIC = Core 2, USB = Core 3
 # ============================================================
 $Tweak_InterruptAffinity = {
@@ -364,13 +357,13 @@ public class WinTimer {
     $min = 0; $max = 0; $cur = 0
     [WinTimer]::NtQueryTimerResolution([ref]$min, [ref]$max, [ref]$cur) | Out-Null
     [WinTimer]::NtSetTimerResolution($max, $true, [ref]$cur) | Out-Null
-    $helperPath = "$env:SystemRoot\System32\GOATX_TimerRes.ps1"
+    $helperPath = "$env:SystemRoot\System32\PRIME_TimerRes.ps1"
     @'
 Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;public class W{[DllImport("ntdll.dll")]public static extern uint NtSetTimerResolution(uint d,bool s,out uint c);}'
 $c=0;[W]::NtSetTimerResolution(5000,$true,[ref]$c)
 while($true){Start-Sleep -Seconds 120}
 '@ | Out-File $helperPath -Encoding Unicode -Force
-    schtasks /Create /TN "GOATX_TimerResolution" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$helperPath`"" /SC ONLOGON /RL HIGHEST /F 2>$null | Out-Null
+    schtasks /Create /TN "PRIME_TimerResolution" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$helperPath`"" /SC ONLOGON /RL HIGHEST /F 2>$null | Out-Null
 }
 
 # ============================================================
@@ -783,7 +776,6 @@ $Tweak_ScheduledTasks2 = {
 
 # ============================================================
 # [53] LSO + RSS Queues
-# FIX: ลบ Jumbo Frames (เสี่ยงทำให้เน็ตพังถ้า switch/router ไม่รองรับ)
 # ============================================================
 $Tweak_LSOandRSS = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
@@ -798,7 +790,6 @@ $Tweak_LSOandRSS = {
 
 # ============================================================
 # [54] TCP Window / BDP Tuning
-# FIX: Tcp1323Opts=1 (window scaling only, no timestamps)
 # ============================================================
 $Tweak_TCPWindowTuning = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v Tcp1323Opts /t REG_DWORD /d 1 /f | Out-Null
@@ -853,8 +844,6 @@ $Tweak_UDPBuffer = {
 
 # ============================================================
 # [58] NIC Flow + RSS Core
-# FIX: RSS BaseProc=2 (core 1 = GPU interrupt, core 2 = NIC)
-# FIX: ปิด IPv6 binding
 # ============================================================
 $Tweak_NICFlowControl = {
     Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
@@ -920,7 +909,6 @@ $Tweak_TCPKeepAlive = {
 
 # ============================================================
 # [63] MMCSS Deep Tuning
-# (formerly [65] — replaces the removed [19] Display Post Processing)
 # ============================================================
 $Tweak_MMCSSDeep = {
     $mmcss = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
@@ -1004,7 +992,6 @@ $Tweak_NTFSDeep = {
 
 # ============================================================
 # [67] CPU Scheduling Deep
-# FIX: ย้าย Prefetcher/Superfetch logic ทั้งหมดมาที่นี่ (single source)
 # ============================================================
 $Tweak_CPUScheduling = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQ8Priority /t REG_DWORD /d 1 /f | Out-Null
@@ -1125,7 +1112,7 @@ $Tweak_DWMOptimize = {
 }
 
 # ============================================================
-# MASTER TABLE — 75 TWEAKS (removed [19] Display Post + [67] PowerPlan)
+# MASTER TABLE — 75 TWEAKS
 # ============================================================
 $AllTweaks = [ordered]@{
     "[01] Kernel + Timer (TSC)"        = $Tweak_KernelTimer
@@ -1205,6 +1192,9 @@ $AllTweaks = [ordered]@{
     "[75] DWM Optimization"            = $Tweak_DWMOptimize
 }
 
+# ============================================================
+# UI — PRIME (same GUI as old prime, renamed)
+# ============================================================
 $script:selectedIndex = 0
 $script:isRunning     = $false
 $script:optionCount   = 2
@@ -1236,7 +1226,7 @@ $clrBg   = [System.Drawing.Color]::Black
 $clrHint = [System.Drawing.Color]::FromArgb(120, 120, 120)
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text            = "GOATX"
+$form.Text            = "PRIME"
 $form.StartPosition   = "CenterScreen"
 $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
 $form.MaximizeBox     = $false
@@ -1275,7 +1265,7 @@ function New-GradientLabel {
     $panel.Controls.Add($pnl); return $pnl
 }
 
-New-GradientLabel -text "G O A T X" -fontSize 22 -style ([System.Drawing.FontStyle]::Bold) -colors $script:GradBright -positions $script:GradPos -x 10 -y 20 -w 430 -h 42 | Out-Null
+New-GradientLabel -text "P R I M E" -fontSize 22 -style ([System.Drawing.FontStyle]::Bold) -colors $script:GradBright -positions $script:GradPos -x 10 -y 20 -w 430 -h 42 | Out-Null
 New-GradientLabel -text "[+] Win10 22H2 Optimized [+]" -fontSize 10 -style ([System.Drawing.FontStyle]::Regular) -colors $script:GradMid -positions $script:GradPos -x 10 -y 66 -w 430 -h 22 | Out-Null
 
 $clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)
