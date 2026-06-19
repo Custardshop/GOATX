@@ -992,12 +992,13 @@ $Tweak_NTFSDeep = {
 
 # ============================================================
 # [67] CPU Scheduling Deep
+# FIX: wrapped Get-PhysicalDisk in try-catch
 # ============================================================
 $Tweak_CPUScheduling = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQ8Priority /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32PrioritySeparation /t REG_DWORD /d 38 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v SecondLevelDataCache /t REG_DWORD /d 0 /f | Out-Null
-    $hasHDD = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'HDD' }
+    try { $hasHDD = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'HDD' } } catch { $hasHDD = $null }
     if ($hasHDD) {
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnablePrefetcher /t REG_DWORD /d 3 /f | Out-Null
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
@@ -1193,7 +1194,7 @@ $AllTweaks = [ordered]@{
 }
 
 # ============================================================
-# UI — PRIME (same GUI as old prime, renamed)
+# UI — PRIME
 # ============================================================
 $script:selectedIndex = 0
 $script:isRunning     = $false
@@ -1266,7 +1267,7 @@ function New-GradientLabel {
 }
 
 New-GradientLabel -text "P R I M E" -fontSize 22 -style ([System.Drawing.FontStyle]::Bold) -colors $script:GradBright -positions $script:GradPos -x 10 -y 20 -w 430 -h 42 | Out-Null
-New-GradientLabel -text "[+] CMD BY CUSTARD [+]" -fontSize 10 -style ([System.Drawing.FontStyle]::Regular) -colors $script:GradMid -positions $script:GradPos -x 10 -y 66 -w 430 -h 22 | Out-Null
+New-GradientLabel -text "[+] Win10 22H2 Optimized [+]" -fontSize 10 -style ([System.Drawing.FontStyle]::Regular) -colors $script:GradMid -positions $script:GradPos -x 10 -y 66 -w 430 -h 22 | Out-Null
 
 $clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)
 $clrOptDim = [System.Drawing.Color]::FromArgb(90, 75, 110)
