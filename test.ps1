@@ -263,11 +263,12 @@ $Tweak_PrivacyTelemetry = {
 
 # ============================================================
 # [17] Windows Services
+# FIX: removed WSearch from autoList (moved to [79] full kill)
 # ============================================================
 $Tweak_Services = {
     $disableList = @('DiagTrack','MapsBroker','XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc','Fax','RetailDemo','RemoteRegistry','WerSvc')
     foreach ($s in $disableList) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
-    $autoList = @('Audiosrv','AudioEndpointBuilder','Dhcp','NlaSvc','Netman','WlanSvc','RpcSs','EventLog','PlugPlay','LanmanWorkstation','LanmanServer','WSearch')
+    $autoList = @('Audiosrv','AudioEndpointBuilder','Dhcp','NlaSvc','Netman','WlanSvc','RpcSs','EventLog','PlugPlay','LanmanWorkstation','LanmanServer')
     foreach ($s in $autoList) { sc.exe config $s start= auto 2>$null | Out-Null; sc.exe start $s 2>$null | Out-Null }
 }
 
@@ -1134,7 +1135,233 @@ $Tweak_FullscreenExclusive = {
 }
 
 # ============================================================
-# MASTER TABLE — 76 TWEAKS
+# [77] Ultimate Performance Plan
+# ============================================================
+$Tweak_UltimatePerformance = {
+    # Unlock hidden Ultimate Performance plan
+    powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null | Out-Null
+    $plans = powercfg -list
+    $match = ($plans | Select-String 'e9a42b02-d5df-448d-aa00-03f14749eb61').ToString()
+    if ($match -match '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})') {
+        $guid = $Matches[1]
+        powercfg /setactive $guid | Out-Null
+    } else {
+        powercfg /setactive SCHEME_CURRENT | Out-Null
+    }
+
+    # Processor performance boost policy — aggressive
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFBOOSTMODE 2 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFBOOSTPOL 100 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFINCTHRESHOLD 1 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFDECTHRESHOLD 10 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFINCTIME 1 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFDECTIME 1 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR DISTRIBUTEUTILITIES 1 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR IDLESCALING 1 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR IDLECHECK 200 | Out-Null
+
+    # Minimum processor state 100% (redundant with #11 but ensures under Ultimate plan)
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 100 | Out-Null
+
+    # Disable sleep + display timeout on AC
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP HYBRIDSLEEP 0 | Out-Null
+    powercfg /setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 0 | Out-Null
+
+    powercfg /setactive SCHEME_CURRENT | Out-Null
+}
+
+# ============================================================
+# [78] Force Max Refresh Rate
+# ============================================================
+$Tweak_MaxRefreshRate = {
+    # Query all active display adapters and set highest refresh
+    Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Video' -ErrorAction SilentlyContinue | ForEach-Object {
+        Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object {
+            $devPath = ($_.PSPath + '\0000')
+            if (Test-Path $devPath) {
+                # Force highest refresh — 0 means "use highest available"
+                Set-ItemProperty -Path $devPath -Name 'DefaultSettings.XVRefreshRate' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+                Set-ItemProperty -Path $devPath -Name 'DefaultSettings.VRefreshRate' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+                Set-ItemProperty -Path $devPath -Name 'DefaultSettings.YResolution' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+                Set-ItemProperty -Path $devPath -Name 'DefaultSettings.XResolution' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
+                Set-ItemProperty -Path $devPath -Name 'RefreshRate' -Value -1 -Type DWord -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    # Disable dynamic refresh rate (Windows feature that drops to 60Hz)
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
+
+    # Disable VRR/FreeSync system-level toggle (game handles this, not Windows)
+    reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v VrrEnabled /t REG_DWORD /d 0 /f 2>$null | Out-Null
+}
+
+# ============================================================
+# [79] Windows Search Full Kill
+# FIX: WSearch removed from [17] autoList — now fully disabled here
+# ============================================================
+$Tweak_WSearchKill = {
+    # Stop and disable
+    sc.exe stop WSearch 2>$null | Out-Null
+    sc.exe config WSearch start= disabled 2>$null | Out-Null
+
+    # Kill indexer process
+    Stop-Process -Name "SearchIndexer" -Force -ErrorAction SilentlyContinue
+    Stop-Process -Name "SearchProtocolHost" -Force -ErrorAction SilentlyContinue
+    Stop-Process -Name "SearchFilterHost" -Force -ErrorAction SilentlyContinue
+
+    # Registry — disable indexing for all volumes
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\WSearch" /v Start /t REG_DWORD /d 4 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v DisableWebSearch /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v ConnectedSearchUseWeb /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCloudSearch /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowSearchToUseLocation /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortanaAboveLock /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v PreventRemoteQueries /t REG_DWORD /d 1 /f | Out-Null
+
+    # Disable per-user search
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v BingSearchEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v CortanaConsent /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f | Out-Null
+
+    # Disable search scheduled tasks
+    Disable-ScheduledTask -TaskName '\Microsoft\Windows\Shell\IndexerAutomaticMaintenance' -ErrorAction SilentlyContinue | Out-Null
+    Disable-ScheduledTask -TaskName '\Microsoft\Windows\Windows Search\UsbCeip' -ErrorAction SilentlyContinue | Out-Null
+    Disable-ScheduledTask -TaskName '\Microsoft\Windows\Windows Search\ScheduledBackoff' -ErrorAction SilentlyContinue | Out-Null
+
+    # Delete search index file to reclaim disk space
+    Remove-Item -Path "$env:ProgramData\Microsoft\Search\Data\Applications\Windows\Windows.edb" -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$env:ProgramData\Microsoft\Search\Data\Applications\Windows\Projects\SystemIndex\Indexer\CiFiles\*" -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+# ============================================================
+# [80] Action Center + Notification Kill
+# ============================================================
+$Tweak_ActionCenterKill = {
+    # Disable Action Center / Notification Center entirely
+    reg add "HKCU\Software\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /t REG_DWORD /d 1 /f | Out-Null
+
+    # Kill all notification types
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.SecurityAndMaintenance" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.LowDisk" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.SkyDrive.Desktop" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.Windows.Cortana" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.SkypeApp_kzf8qxf38zg5c" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.Windows.Photos" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.MicrosoftEdge" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.BingNews" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.BingWeather" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.XboxGameCallableUI" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.WindowsFeedbackHub" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.GetHelp" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.Getstarted" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+
+    # Disable notification badge on taskbar
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowTaskViewButton /t REG_DWORD /d 0 /f | Out-Null
+
+    # Disable SecurityHealthService (security notification tray)
+    sc.exe stop SecurityHealthService 2>$null | Out-Null
+    sc.exe config SecurityHealthService start= disabled 2>$null | Out-Null
+
+    # Kill WpnService more aggressively (was disabled in #38 but double-check)
+    sc.exe stop WpnService 2>$null | Out-Null
+    sc.exe config WpnService start= disabled 2>$null | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\WpnService" /v Start /t REG_DWORD /d 4 /f | Out-Null
+}
+
+# ============================================================
+# [81] Bluetooth + Touch + Handwriting
+# ============================================================
+$Tweak_BluetoothTouchDisable = {
+    # Bluetooth services
+    $btServices = @('bthserv','BthAvctpSvc','BluetoothUserService')
+    foreach ($s in $btServices) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
+
+    # Disable bluetooth adapter power management
+    Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' } | ForEach-Object {
+        Disable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
+    }
+
+    # Touch + Handwriting services
+    $touchServices = @('TabletInputService','TextInputManagementService','TouchInputService','frameServer')
+    foreach ($s in $touchServices) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
+
+    # Disable touch keyboard button
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowTabletKeyboardButton /t REG_DWORD /d 0 /f | Out-Null
+
+    # Disable pen & ink
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\PenWorkspace" /v PenWorkspaceAppSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
+
+    # Disable handwriting error reports
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\HandwritingErrorReports" /v PreventHandwritingErrorReports /t REG_DWORD /d 1 /f | Out-Null
+
+    # Disable GameInput service (Win10/11 new service, not needed)
+    sc.exe stop GameInputSvc 2>$null | Out-Null; sc.exe config GameInputSvc start= disabled 2>$null | Out-Null
+}
+
+# ============================================================
+# [82] BCD Quiet Boot + Timeout Zero
+# ============================================================
+$Tweak_BCDQuietBoot = {
+    bcdedit /set timeout 0 | Out-Null
+    bcdedit /set quietboot yes | Out-Null
+    bcdedit /set bootmenupolicy standard | Out-Null
+    bcdedit /set bootlog no | Out-Null
+    bcdedit /set recoveryenabled no | Out-Null
+    bcdedit /deletevalue {current} custom:2600002d 2>$null | Out-Null
+
+    # Disable boot debugger
+    bcdedit /set debug off | Out-Null
+    bcdedit /set bootdebug off | Out-Null
+    bcdedit /set {globalsettings} custom:16000067 false 2>$null | Out-Null
+    bcdedit /set {globalsettings} custom:16000069 false 2>$null | Out-Null
+
+    # Disable Windows Error Recovery screen at boot
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\CrashControl" /v AutoReboot /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\CrashControl" /v CrashDumpEnabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\CrashControl" /v LogEvent /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\CrashControl" /v SendAlert /t REG_DWORD /d 0 /f | Out-Null
+
+    # Disable auto-repair at boot
+    bcdedit /set bootstatuspolicy IgnoreAllFailures | Out-Null
+}
+
+# ============================================================
+# [83] Focus Assist Auto
+# ============================================================
+$Tweak_FocusAssist = {
+    # Enable Focus Assist (Priority Only mode = 1, Alarms Only = 2)
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\DefaultAccount\Current\default`$windows.data.notifications.quiethourssettings\windows.data.notifications.quiethourssettings" /v Data /t REG_BINARY /d 020000004e07e7070b000a001200280030003800010000001e0000000101 /f 2>$null | Out-Null
+
+    # Set registry for automatic DND
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" /v NOC_GLOBAL_SETTING_ALLOW_TOASTS_WHILE_IN_DND /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" /v NOC_GLOBAL_SETTING_ALLOW_CRITICAL_TOASTS_WHILE_IN_DND /t REG_DWORD /d 0 /f | Out-Null
+
+    # Quiet hours — disable during presentation mode
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" /v NOC_GLOBAL_SETTING_GAMING_FOCUS_ACTIVE /t REG_DWORD /d 1 /f | Out-Null
+
+    # Group Policy — suppress all notifications system-wide
+    reg add "HKCU\Software\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /t REG_DWORD /d 1 /f | Out-Null
+
+    # Auto-enable DND for fullscreen apps
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\NOC_GLOBAL_SETTING_ALLOW_CRITICAL_TOASTS_ABOVE_LOCK" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
+
+    # Disable sound notifications
+    reg add "HKCU\AppEvents\Schemes\Apps\.Default\Notification.Default\.Current" /ve /t REG_SZ /d "" /f 2>$null | Out-Null
+    reg add "HKCU\AppEvents\Schemes\Apps\.Default\SystemNotification\.Current" /ve /t REG_SZ /d "" /f 2>$null | Out-Null
+
+    # Disable fullscreen notification banner
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v EnableBalloonTips /t REG_DWORD /d 0 /f | Out-Null
+}
+
+# ============================================================
+# MASTER TABLE — 83 TWEAKS
 # ============================================================
 $AllTweaks = [ordered]@{
     "[01] Kernel + Timer (TSC)"        = $Tweak_KernelTimer
@@ -1213,6 +1440,13 @@ $AllTweaks = [ordered]@{
     "[74] CSRSS Priority"              = $Tweak_CSRSSPriority
     "[75] DWM Optimization"            = $Tweak_DWMOptimize
     "[76] Force Fullscreen Exclusive"  = $Tweak_FullscreenExclusive
+    "[77] Ultimate Performance Plan"   = $Tweak_UltimatePerformance
+    "[78] Force Max Refresh Rate"      = $Tweak_MaxRefreshRate
+    "[79] Windows Search Full Kill"    = $Tweak_WSearchKill
+    "[80] Action Center + Notif Kill"  = $Tweak_ActionCenterKill
+    "[81] BT + Touch + Handwriting"    = $Tweak_BluetoothTouchDisable
+    "[82] BCD Quiet Boot + Debug"      = $Tweak_BCDQuietBoot
+    "[83] Focus Assist Auto"           = $Tweak_FocusAssist
 }
 
 # ============================================================
