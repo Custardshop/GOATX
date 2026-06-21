@@ -1113,7 +1113,28 @@ $Tweak_DWMOptimize = {
 }
 
 # ============================================================
-# MASTER TABLE — 75 TWEAKS
+# [76] Force Fullscreen Exclusive (Disable FSO)
+# ============================================================
+$Tweak_FullscreenExclusive = {
+    # GameConfigStore — disable FSO globally
+    reg add "HKCU\System\GameConfigStore" /v GameDVR_FSEBehaviorMode /t REG_DWORD /d 2 /f | Out-Null
+    reg add "HKCU\System\GameConfigStore" /v GameDVR_HonorUserFSEBehaviorMode /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKCU\System\GameConfigStore" /v GameDVR_FSEBehavior /t REG_DWORD /d 2 /f | Out-Null
+    reg add "HKCU\System\GameConfigStore" /v GameDVR_DXGIHonorFSEWindowsCompatible /t REG_DWORD /d 1 /f | Out-Null
+    reg add "HKCU\System\GameConfigStore" /v GameDVR_EFSEFeatureEnabled /t REG_DWORD /d 0 /f | Out-Null
+
+    # Disable fullscreen optimizations for all apps
+    reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer" /v FullscreenOptimizations /t REG_DWORD /d 0 /f | Out-Null
+
+    # Compatibility layer — force exclusive fullscreen globally
+    reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v DirectXUserGlobalSettings /t REG_SZ /d "SwapEffect=0;VRROptimizeEnable=0;" /f | Out-Null
+
+    # DWM forced off fullscreen transitions
+    reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
+}
+
+# ============================================================
+# MASTER TABLE — 76 TWEAKS
 # ============================================================
 $AllTweaks = [ordered]@{
     "[01] Kernel + Timer (TSC)"        = $Tweak_KernelTimer
@@ -1191,6 +1212,7 @@ $AllTweaks = [ordered]@{
     "[73] ETW Session Disable"         = $Tweak_ETWDisable
     "[74] CSRSS Priority"              = $Tweak_CSRSSPriority
     "[75] DWM Optimization"            = $Tweak_DWMOptimize
+    "[76] Force Fullscreen Exclusive"  = $Tweak_FullscreenExclusive
 }
 
 # ============================================================
