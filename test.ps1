@@ -1,3 +1,14 @@
+# ============================================================
+# PRIME Optimizer - 83 Tweaks - Full Fixed Version
+# ============================================================
+# Fixes applied:
+# - [18] Event Log cleanup: per-log timeout 3s
+# - [42] vssadmin shadows: timeout 10s
+# - Main loop: Start-Job + Wait-Job -Timeout 60 per tweak
+# - GUI: DoEvents() to prevent freeze
+# - Completion MessageBox
+# ============================================================
+
 $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -274,6 +285,7 @@ $Tweak_Services = {
 
 # ============================================================
 # [18] Junk and Log Cleanup
+# FIX: per-log timeout 3s to prevent hang on stuck logs
 # ============================================================
 $Tweak_JunkCleanup = {
     Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
@@ -283,7 +295,21 @@ $Tweak_JunkCleanup = {
     Stop-Service UsoSvc -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$env:WINDIR\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
     Start-Service wuauserv -ErrorAction SilentlyContinue
-    Get-WinEvent -ListLog * -ErrorAction SilentlyContinue | ForEach-Object { try { wevtutil.exe cl $_.LogName } catch {} }
+
+    # FIX: timeout 3s per log to prevent infinite hang
+    Get-WinEvent -ListLog * -ErrorAction SilentlyContinue |
+        Where-Object { $_.RecordCount -gt 0 -and $_.IsEnabled } |
+        ForEach-Object {
+            $logName = $_.LogName
+            $logJob = Start-Job -ScriptBlock {
+                param($ln)
+                wevtutil.exe cl $ln 2>$null
+            } -ArgumentList $logName
+            $done = Wait-Job $logJob -Timeout 3
+            if (-not $done) { Stop-Job $logJob -Force }
+            Remove-Job $logJob -Force -ErrorAction SilentlyContinue
+        }
+
     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
 }
 
@@ -607,10 +633,17 @@ $Tweak_DiagnosticServices = {
 
 # ============================================================
 # [42] System Restore Off
+# FIX: timeout 10s for vssadmin to prevent hang
 # ============================================================
 $Tweak_SystemRestoreOff = {
     Disable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
-    vssadmin delete shadows /all /quiet 2>$null | Out-Null
+
+    # FIX: timeout 10s for vssadmin which can hang on locked VSS
+    $vssJob = Start-Job -ScriptBlock { vssadmin delete shadows /all /quiet 2>$null }
+    $done = Wait-Job $vssJob -Timeout 10
+    if (-not $done) { Stop-Job $vssJob -Force }
+    Remove-Job $vssJob -Force -ErrorAction SilentlyContinue
+
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v RPSessionInterval /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v DisableSR /t REG_DWORD /d 1 /f | Out-Null
 }
@@ -1117,20 +1150,13 @@ $Tweak_DWMOptimize = {
 # [76] Force Fullscreen Exclusive (Disable FSO)
 # ============================================================
 $Tweak_FullscreenExclusive = {
-    # GameConfigStore — disable FSO globally
     reg add "HKCU\System\GameConfigStore" /v GameDVR_FSEBehaviorMode /t REG_DWORD /d 2 /f | Out-Null
     reg add "HKCU\System\GameConfigStore" /v GameDVR_HonorUserFSEBehaviorMode /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKCU\System\GameConfigStore" /v GameDVR_FSEBehavior /t REG_DWORD /d 2 /f | Out-Null
     reg add "HKCU\System\GameConfigStore" /v GameDVR_DXGIHonorFSEWindowsCompatible /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKCU\System\GameConfigStore" /v GameDVR_EFSEFeatureEnabled /t REG_DWORD /d 0 /f | Out-Null
-
-    # Disable fullscreen optimizations for all apps
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer" /v FullscreenOptimizations /t REG_DWORD /d 0 /f | Out-Null
-
-    # Compatibility layer — force exclusive fullscreen globally
     reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v DirectXUserGlobalSettings /t REG_SZ /d "SwapEffect=0;VRROptimizeEnable=0;" /f | Out-Null
-
-    # DWM forced off fullscreen transitions
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
 }
 
@@ -1138,7 +1164,6 @@ $Tweak_FullscreenExclusive = {
 # [77] Ultimate Performance Plan
 # ============================================================
 $Tweak_UltimatePerformance = {
-    # Unlock hidden Ultimate Performance plan
     powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 2>$null | Out-Null
     $plans = powercfg -list
     $match = ($plans | Select-String 'e9a42b02-d5df-448d-aa00-03f14749eb61').ToString()
@@ -1148,8 +1173,6 @@ $Tweak_UltimatePerformance = {
     } else {
         powercfg /setactive SCHEME_CURRENT | Out-Null
     }
-
-    # Processor performance boost policy — aggressive
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFBOOSTMODE 2 | Out-Null
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFBOOSTPOL 100 | Out-Null
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFINCTHRESHOLD 1 | Out-Null
@@ -1159,16 +1182,11 @@ $Tweak_UltimatePerformance = {
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR DISTRIBUTEUTILITIES 1 | Out-Null
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR IDLESCALING 1 | Out-Null
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR IDLECHECK 200 | Out-Null
-
-    # Minimum processor state 100% (redundant with #11 but ensures under Ultimate plan)
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100 | Out-Null
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 100 | Out-Null
-
-    # Disable sleep + display timeout on AC
     powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0 | Out-Null
     powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP HYBRIDSLEEP 0 | Out-Null
     powercfg /setacvalueindex SCHEME_CURRENT SUB_VIDEO VIDEOIDLE 0 | Out-Null
-
     powercfg /setactive SCHEME_CURRENT | Out-Null
 }
 
@@ -1176,12 +1194,10 @@ $Tweak_UltimatePerformance = {
 # [78] Force Max Refresh Rate
 # ============================================================
 $Tweak_MaxRefreshRate = {
-    # Query all active display adapters and set highest refresh
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Video' -ErrorAction SilentlyContinue | ForEach-Object {
         Get-ChildItem $_.PSPath -ErrorAction SilentlyContinue | ForEach-Object {
             $devPath = ($_.PSPath + '\0000')
             if (Test-Path $devPath) {
-                # Force highest refresh — 0 means "use highest available"
                 Set-ItemProperty -Path $devPath -Name 'DefaultSettings.XVRefreshRate' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
                 Set-ItemProperty -Path $devPath -Name 'DefaultSettings.VRefreshRate' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
                 Set-ItemProperty -Path $devPath -Name 'DefaultSettings.YResolution' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
@@ -1190,29 +1206,20 @@ $Tweak_MaxRefreshRate = {
             }
         }
     }
-
-    # Disable dynamic refresh rate (Windows feature that drops to 60Hz)
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
-
-    # Disable VRR/FreeSync system-level toggle (game handles this, not Windows)
     reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v VrrEnabled /t REG_DWORD /d 0 /f 2>$null | Out-Null
 }
 
 # ============================================================
 # [79] Windows Search Full Kill
-# FIX: WSearch removed from [17] autoList — now fully disabled here
+# FIX: WSearch removed from [17] autoList - now fully disabled here
 # ============================================================
 $Tweak_WSearchKill = {
-    # Stop and disable
     sc.exe stop WSearch 2>$null | Out-Null
     sc.exe config WSearch start= disabled 2>$null | Out-Null
-
-    # Kill indexer process
     Stop-Process -Name "SearchIndexer" -Force -ErrorAction SilentlyContinue
     Stop-Process -Name "SearchProtocolHost" -Force -ErrorAction SilentlyContinue
     Stop-Process -Name "SearchFilterHost" -Force -ErrorAction SilentlyContinue
-
-    # Registry — disable indexing for all volumes
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\WSearch" /v Start /t REG_DWORD /d 4 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v DisableWebSearch /t REG_DWORD /d 1 /f | Out-Null
@@ -1221,18 +1228,12 @@ $Tweak_WSearchKill = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowSearchToUseLocation /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortanaAboveLock /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v PreventRemoteQueries /t REG_DWORD /d 1 /f | Out-Null
-
-    # Disable per-user search
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v BingSearchEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v CortanaConsent /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Search" /v SearchboxTaskbarMode /t REG_DWORD /d 0 /f | Out-Null
-
-    # Disable search scheduled tasks
     Disable-ScheduledTask -TaskName '\Microsoft\Windows\Shell\IndexerAutomaticMaintenance' -ErrorAction SilentlyContinue | Out-Null
     Disable-ScheduledTask -TaskName '\Microsoft\Windows\Windows Search\UsbCeip' -ErrorAction SilentlyContinue | Out-Null
     Disable-ScheduledTask -TaskName '\Microsoft\Windows\Windows Search\ScheduledBackoff' -ErrorAction SilentlyContinue | Out-Null
-
-    # Delete search index file to reclaim disk space
     Remove-Item -Path "$env:ProgramData\Microsoft\Search\Data\Applications\Windows\Windows.edb" -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$env:ProgramData\Microsoft\Search\Data\Applications\Windows\Projects\SystemIndex\Indexer\CiFiles\*" -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -1241,11 +1242,8 @@ $Tweak_WSearchKill = {
 # [80] Action Center + Notification Kill
 # ============================================================
 $Tweak_ActionCenterKill = {
-    # Disable Action Center / Notification Center entirely
     reg add "HKCU\Software\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /t REG_DWORD /d 1 /f | Out-Null
-
-    # Kill all notification types
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\PushNotifications" /v ToastEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.SecurityAndMaintenance" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.LowDisk" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
@@ -1260,15 +1258,9 @@ $Tweak_ActionCenterKill = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.WindowsFeedbackHub" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.GetHelp" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Microsoft.Getstarted" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
-
-    # Disable notification badge on taskbar
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowTaskViewButton /t REG_DWORD /d 0 /f | Out-Null
-
-    # Disable SecurityHealthService (security notification tray)
     sc.exe stop SecurityHealthService 2>$null | Out-Null
     sc.exe config SecurityHealthService start= disabled 2>$null | Out-Null
-
-    # Kill WpnService more aggressively (was disabled in #38 but double-check)
     sc.exe stop WpnService 2>$null | Out-Null
     sc.exe config WpnService start= disabled 2>$null | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\WpnService" /v Start /t REG_DWORD /d 4 /f | Out-Null
@@ -1278,29 +1270,16 @@ $Tweak_ActionCenterKill = {
 # [81] Bluetooth + Touch + Handwriting
 # ============================================================
 $Tweak_BluetoothTouchDisable = {
-    # Bluetooth services
     $btServices = @('bthserv','BthAvctpSvc','BluetoothUserService')
     foreach ($s in $btServices) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
-
-    # Disable bluetooth adapter power management
     Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' } | ForEach-Object {
         Disable-PnpDevice -InstanceId $_.InstanceId -Confirm:$false -ErrorAction SilentlyContinue
     }
-
-    # Touch + Handwriting services
     $touchServices = @('TabletInputService','TextInputManagementService','TouchInputService','frameServer')
     foreach ($s in $touchServices) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
-
-    # Disable touch keyboard button
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowTabletKeyboardButton /t REG_DWORD /d 0 /f | Out-Null
-
-    # Disable pen & ink
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\PenWorkspace" /v PenWorkspaceAppSuggestionsEnabled /t REG_DWORD /d 0 /f | Out-Null
-
-    # Disable handwriting error reports
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\HandwritingErrorReports" /v PreventHandwritingErrorReports /t REG_DWORD /d 1 /f | Out-Null
-
-    # Disable GameInput service (Win10/11 new service, not needed)
     sc.exe stop GameInputSvc 2>$null | Out-Null; sc.exe config GameInputSvc start= disabled 2>$null | Out-Null
 }
 
@@ -1314,20 +1293,14 @@ $Tweak_BCDQuietBoot = {
     bcdedit /set bootlog no | Out-Null
     bcdedit /set recoveryenabled no | Out-Null
     bcdedit /deletevalue {current} custom:2600002d 2>$null | Out-Null
-
-    # Disable boot debugger
     bcdedit /set debug off | Out-Null
     bcdedit /set bootdebug off | Out-Null
     bcdedit /set {globalsettings} custom:16000067 false 2>$null | Out-Null
     bcdedit /set {globalsettings} custom:16000069 false 2>$null | Out-Null
-
-    # Disable Windows Error Recovery screen at boot
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\CrashControl" /v AutoReboot /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\CrashControl" /v CrashDumpEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\CrashControl" /v LogEvent /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\CrashControl" /v SendAlert /t REG_DWORD /d 0 /f | Out-Null
-
-    # Disable auto-repair at boot
     bcdedit /set bootstatuspolicy IgnoreAllFailures | Out-Null
 }
 
@@ -1335,33 +1308,20 @@ $Tweak_BCDQuietBoot = {
 # [83] Focus Assist Auto
 # ============================================================
 $Tweak_FocusAssist = {
-    # Enable Focus Assist (Priority Only mode = 1, Alarms Only = 2)
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\CloudStore\Store\DefaultAccount\Current\default`$windows.data.notifications.quiethourssettings\windows.data.notifications.quiethourssettings" /v Data /t REG_BINARY /d 020000004e07e7070b000a001200280030003800010000001e0000000101 /f 2>$null | Out-Null
-
-    # Set registry for automatic DND
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" /v NOC_GLOBAL_SETTING_ALLOW_TOASTS_WHILE_IN_DND /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" /v NOC_GLOBAL_SETTING_ALLOW_CRITICAL_TOASTS_WHILE_IN_DND /t REG_DWORD /d 0 /f | Out-Null
-
-    # Quiet hours — disable during presentation mode
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" /v NOC_GLOBAL_SETTING_GAMING_FOCUS_ACTIVE /t REG_DWORD /d 1 /f | Out-Null
-
-    # Group Policy — suppress all notifications system-wide
     reg add "HKCU\Software\Policies\Microsoft\Windows\Explorer" /v DisableNotificationCenter /t REG_DWORD /d 1 /f | Out-Null
-
-    # Auto-enable DND for fullscreen apps
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\NOC_GLOBAL_SETTING_ALLOW_CRITICAL_TOASTS_ABOVE_LOCK" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
-
-    # Disable sound notifications
     reg add "HKCU\AppEvents\Schemes\Apps\.Default\Notification.Default\.Current" /ve /t REG_SZ /d "" /f 2>$null | Out-Null
     reg add "HKCU\AppEvents\Schemes\Apps\.Default\SystemNotification\.Current" /ve /t REG_SZ /d "" /f 2>$null | Out-Null
-
-    # Disable fullscreen notification banner
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v EnableBalloonTips /t REG_DWORD /d 0 /f | Out-Null
 }
 
 # ============================================================
-# MASTER TABLE — 83 TWEAKS
+# MASTER TABLE - 83 TWEAKS (COMPLETE)
 # ============================================================
 $AllTweaks = [ordered]@{
     "[01] Kernel + Timer (TSC)"        = $Tweak_KernelTimer
@@ -1409,15 +1369,15 @@ $AllTweaks = [ordered]@{
     "[43] Additional Services v2"      = $Tweak_AdditionalServices2
     "[44] Spotlight and Clipboard"     = $Tweak_SpotlightClipboard
     "[45] NVIDIA Telemetry"            = $Tweak_NvidiaTelemetry
-    "[46] News + Copilot Disable"      = $Tweak_CopilotRecall
+    "[46] News + Interests + Copilot"  = $Tweak_CopilotRecall
     "[47] Storage Sense + Edge"        = $Tweak_StorageEdge
     "[48] Boot and Login Speed"        = $Tweak_BootLoginSpeed
     "[49] Autologger Disable"          = $Tweak_AutologgerDisable
     "[50] Pagefile Optimize"           = $Tweak_PagefileOptimize
-    "[51] SmartScreen and AutoPlay"    = $Tweak_SmartScreen
+    "[51] SmartScreen + AutoPlay"      = $Tweak_SmartScreen
     "[52] Scheduled Tasks v2"          = $Tweak_ScheduledTasks2
     "[53] LSO + RSS Queues"            = $Tweak_LSOandRSS
-    "[54] TCP Window BDP"              = $Tweak_TCPWindowTuning
+    "[54] TCP Window / BDP Tuning"     = $Tweak_TCPWindowTuning
     "[55] WiFi Optimize"               = $Tweak_WiFiOptimize
     "[56] TCP Congestion"              = $Tweak_TCPCongestion
     "[57] UDP Buffer"                  = $Tweak_UDPBuffer
@@ -1444,183 +1404,155 @@ $AllTweaks = [ordered]@{
     "[78] Force Max Refresh Rate"      = $Tweak_MaxRefreshRate
     "[79] Windows Search Full Kill"    = $Tweak_WSearchKill
     "[80] Action Center + Notif Kill"  = $Tweak_ActionCenterKill
-    "[81] BT + Touch + Handwriting"    = $Tweak_BluetoothTouchDisable
-    "[82] BCD Quiet Boot + Debug"      = $Tweak_BCDQuietBoot
+    "[81] Bluetooth + Touch + HW"      = $Tweak_BluetoothTouchDisable
+    "[82] BCD Quiet Boot + Timeout"    = $Tweak_BCDQuietBoot
     "[83] Focus Assist Auto"           = $Tweak_FocusAssist
 }
 
 # ============================================================
-# UI — PRIME
+# GUI FORM
 # ============================================================
-$script:selectedIndex = 0
-$script:isRunning     = $false
-$script:optionCount   = 2
-$script:labelControls = @()
-$script:errorLog      = @()
-$script:options = @(
-    @{ Label = "[1] High"; Action = "high" }
-    @{ Label = "[2] Exit"; Action = "exit" }
-)
-
-$script:GradBright = @(
-    [System.Drawing.Color]::FromArgb(80, 200, 255),
-    [System.Drawing.Color]::FromArgb(180, 120, 255),
-    [System.Drawing.Color]::FromArgb(255, 120, 180)
-)
-$script:GradMid = @(
-    [System.Drawing.Color]::FromArgb(100, 180, 220),
-    [System.Drawing.Color]::FromArgb(160, 130, 220),
-    [System.Drawing.Color]::FromArgb(220, 140, 190)
-)
-$script:GradDim = @(
-    [System.Drawing.Color]::FromArgb(60, 110, 140),
-    [System.Drawing.Color]::FromArgb(110, 70, 140),
-    [System.Drawing.Color]::FromArgb(140, 70, 100)
-)
-$script:GradPos = @(0.0, 0.5, 1.0)
-
-$clrBg   = [System.Drawing.Color]::Black
-$clrHint = [System.Drawing.Color]::FromArgb(120, 120, 120)
-
 $form = New-Object System.Windows.Forms.Form
-$form.Text            = "PRIME"
-$form.StartPosition   = "CenterScreen"
-$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
-$form.MaximizeBox     = $false
-$form.BackColor       = $clrBg
-$form.TopMost         = $true
-$form.KeyPreview      = $true
-$form.Opacity         = 0.85
-$form.ClientSize      = New-Object System.Drawing.Size(450, 235)
+$form.Text = "PRIME Optimizer - 83 Tweaks"
+$form.Size = New-Object System.Drawing.Size(520, 380)
+$form.StartPosition = "CenterScreen"
+$form.FormBorderStyle = "FixedSingle"
+$form.MaximizeBox = $false
+$form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
+$form.ForeColor = [System.Drawing.Color]::FromArgb(224, 220, 210)
+$form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 
-$panel = New-Object System.Windows.Forms.Panel
-$panel.Dock      = "Fill"
-$panel.BackColor = $clrBg
-$panel.TabStop   = $true
-$form.Controls.Add($panel)
+$titleLabel = New-Object System.Windows.Forms.Label
+$titleLabel.Text = "PRIME OPTIMIZER"
+$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
+$titleLabel.ForeColor = [System.Drawing.Color]::FromArgb(232, 197, 71)
+$titleLabel.AutoSize = $true
+$titleLabel.Location = New-Object System.Drawing.Point(160, 20)
+$form.Controls.Add($titleLabel)
 
-function New-GradientLabel {
-    param([string]$text,[float]$fontSize,[System.Drawing.FontStyle]$style,[System.Drawing.Color[]]$colors,[float[]]$positions,[int]$x,[int]$y,[int]$w,[int]$h)
-    $pnl = New-Object System.Windows.Forms.Panel
-    $pnl.Size = New-Object System.Drawing.Size($w,$h)
-    $pnl.Location = New-Object System.Drawing.Point($x,$y)
-    $pnl.BackColor = [System.Drawing.Color]::Transparent
-    $pnl.Tag = @{ Text=$text; FontSize=$fontSize; Style=$style; Colors=$colors; Positions=$positions }
-    $pnl.Add_Paint({
-        param($s,$e)
-        $dp=$s.Tag; $font=New-Object System.Drawing.Font("Consolas",$dp.FontSize,$dp.Style)
-        $colors=$dp.Colors; $pos=$dp.Positions
-        $e.Graphics.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-        $e.Graphics.TextRenderingHint=[System.Drawing.Text.TextRenderingHint]::AntiAlias
-        $brush=New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.Point(0,0)),(New-Object System.Drawing.Point($s.Width,0)),$colors[0],$colors[$colors.Length-1])
-        if($colors.Length-gt 2){$blend=New-Object System.Drawing.Drawing2D.ColorBlend;$blend.Colors=$colors;$blend.Positions=$pos;$brush.InterpolationColors=$blend}
-        $sf=New-Object System.Drawing.StringFormat;$sf.Alignment=[System.Drawing.StringAlignment]::Center;$sf.LineAlignment=[System.Drawing.StringAlignment]::Center
-        $rect=New-Object System.Drawing.RectangleF(0,0,$s.Width,$s.Height)
-        $e.Graphics.DrawString($dp.Text,$font,$brush,$rect,$sf)
-        $brush.Dispose();$font.Dispose();$sf.Dispose()
+$subLabel = New-Object System.Windows.Forms.Label
+$subLabel.Text = "83 Windows Performance Tweaks"
+$subLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$subLabel.ForeColor = [System.Drawing.Color]::FromArgb(122, 117, 112)
+$subLabel.AutoSize = $true
+$subLabel.Location = New-Object System.Drawing.Point(170, 52)
+$form.Controls.Add($subLabel)
+
+$progressBar = New-Object System.Windows.Forms.ProgressBar
+$progressBar.Location = New-Object System.Drawing.Point(30, 90)
+$progressBar.Size = New-Object System.Drawing.Size(445, 22)
+$progressBar.Style = "Continuous"
+$progressBar.Minimum = 0
+$progressBar.Maximum = 83
+$progressBar.Value = 0
+$progressBar.ForeColor = [System.Drawing.Color]::FromArgb(232, 197, 71)
+$form.Controls.Add($progressBar)
+
+$lblStatus = New-Object System.Windows.Forms.Label
+$lblStatus.Text = "Ready to optimize..."
+$lblStatus.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$lblStatus.ForeColor = [System.Drawing.Color]::FromArgb(160, 156, 148)
+$lblStatus.Size = New-Object System.Drawing.Size(445, 20)
+$lblStatus.Location = New-Object System.Drawing.Point(30, 120)
+$form.Controls.Add($lblStatus)
+
+$logBox = New-Object System.Windows.Forms.TextBox
+$logBox.Multiline = $true
+$logBox.ScrollBars = "Vertical"
+$logBox.ReadOnly = $true
+$logBox.BackColor = [System.Drawing.Color]::FromArgb(10, 10, 10)
+$logBox.ForeColor = [System.Drawing.Color]::FromArgb(160, 156, 148)
+$logBox.Font = New-Object System.Drawing.Font("Consolas", 8)
+$logBox.Location = New-Object System.Drawing.Point(30, 145)
+$logBox.Size = New-Object System.Drawing.Size(445, 140)
+$form.Controls.Add($logBox)
+
+$btnRun = New-Object System.Windows.Forms.Button
+$btnRun.Text = "START OPTIMIZATION"
+$btnRun.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+$btnRun.BackColor = [System.Drawing.Color]::FromArgb(232, 197, 71)
+$btnRun.ForeColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
+$btnRun.FlatStyle = "Flat"
+$btnRun.Size = New-Object System.Drawing.Size(445, 38)
+$btnRun.Location = New-Object System.Drawing.Point(30, 300)
+$btnRun.Cursor = [System.Windows.Forms.Cursors]::Hand
+$form.Controls.Add($btnRun)
+
+# ============================================================
+# MAIN EXECUTION LOGIC (FIXED: timeout per tweak + DoEvents)
+# ============================================================
+$btnRun.Add_Click({
+    $btnRun.Enabled = $false
+    $btnRun.Text = "RUNNING..."
+    $logBox.Clear()
+
+    $i = 0
+    $total = $AllTweaks.Count
+    $failCount = 0
+    $timeoutCount = 0
+
+    foreach ($key in $AllTweaks.Keys) {
+        $i++
+
+        # Update GUI
+        $lblStatus.Text = "[$i/$total] $key"
+        $progressBar.Value = $i
+        $logBox.AppendText("[$i/$total] $key ...")
+        $logBox.ScrollToCaret()
+
+        # FIX: DoEvents to keep GUI responsive
+        [System.Windows.Forms.Application]::DoEvents()
+
+        # FIX: Run each tweak in a background job with 60s timeout
+        $tweakCode = $AllTweaks[$key]
+        $tweakJob = Start-Job -ScriptBlock $tweakCode
+
+        $completed = Wait-Job $tweakJob -Timeout 60
+
+        if ($completed) {
+            $err = Receive-Job $tweakJob -ErrorAction SilentlyContinue 2>&1
+            if ($tweakJob.State -eq 'Failed') {
+                $logBox.AppendText(" FAIL`r`n")
+                $failCount++
+            } else {
+                $logBox.AppendText(" OK`r`n")
+            }
+        } else {
+            Stop-Job $tweakJob -Force
+            $logBox.AppendText(" TIMEOUT (skipped)`r`n")
+            $timeoutCount++
+        }
+        Remove-Job $tweakJob -Force -ErrorAction SilentlyContinue
+        $logBox.ScrollToCaret()
+        [System.Windows.Forms.Application]::DoEvents()
+    }
+
+    # Done
+    $lblStatus.Text = "COMPLETE - OK: $($total - $failCount - $timeoutCount) | Fail: $failCount | Timeout: $timeoutCount"
+    $btnRun.Text = "REBOOT NOW"
+    $btnRun.Enabled = $true
+
+    $logBox.AppendText("`r`n=== ALL 83 TWEAKS FINISHED ===`r`n")
+    $logBox.AppendText("Success: $($total - $failCount - $timeoutCount) / $total`r`n")
+    $logBox.AppendText("Failed: $failCount | Timed out: $timeoutCount`r`n")
+    $logBox.AppendText("Reboot recommended.`r`n")
+    $logBox.ScrollToCaret()
+
+    # FIX: Completion MessageBox
+    [System.Windows.Forms.MessageBox]::Show(
+        "All 83 tweaks completed.`r`n`r`nSuccess: $($total - $failCount - $timeoutCount)`r`nFailed: $failCount`r`nTimeout: $timeoutCount`r`n`r`nReboot recommended.",
+        "PRIME Optimizer",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    )
+
+    $btnRun.Add_Click({
+        $restartJob = Start-Job -ScriptBlock { shutdown /r /t 5 /f }
+        $form.Close()
     })
-    $panel.Controls.Add($pnl); return $pnl
-}
+})
 
-New-GradientLabel -text "P R I M E" -fontSize 22 -style ([System.Drawing.FontStyle]::Bold) -colors $script:GradBright -positions $script:GradPos -x 10 -y 20 -w 430 -h 42 | Out-Null
-New-GradientLabel -text "[+] Win10 22H2 Optimized [+]" -fontSize 10 -style ([System.Drawing.FontStyle]::Regular) -colors $script:GradMid -positions $script:GradPos -x 10 -y 66 -w 430 -h 22 | Out-Null
-
-$clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)
-$clrOptDim = [System.Drawing.Color]::FromArgb(90, 75, 110)
-$fontOpt = New-Object System.Drawing.Font("Consolas", 12)
-$optStartY = 104; $optSpacing = 32
-
-for ($i = 0; $i -lt $script:optionCount; $i++) {
-    $lbl = New-Object System.Windows.Forms.Label
-    $lbl.Text = if ($i -eq 0) { "> " + $script:options[$i].Label } else { "  " + $script:options[$i].Label }
-    $lbl.Font = $fontOpt; $lbl.ForeColor = if ($i -eq 0) { $clrOptHi } else { $clrOptDim }
-    $lbl.AutoSize = $false; $lbl.Size = New-Object System.Drawing.Size(430, 28)
-    $lbl.Location = New-Object System.Drawing.Point(10, ($optStartY + $i * $optSpacing))
-    $lbl.TextAlign = "MiddleLeft"; $lbl.BackColor = [System.Drawing.Color]::Transparent
-    $lbl.Cursor = [System.Windows.Forms.Cursors]::Hand; $lbl.Tag = $i
-    $lbl.Add_Click({ param($s,$e); if(-not $script:isRunning){ $script:selectedIndex=[int]$s.Tag; Update-Highlight; Execute-Selection } })
-    $panel.Controls.Add($lbl); $script:labelControls += $lbl
-}
-
-$fontHint = New-Object System.Drawing.Font("Consolas", 8)
-$hintLbl = New-Object System.Windows.Forms.Label
-$hintLbl.Text = "Arrow keys to navigate, Enter to select"
-$hintLbl.Font = $fontHint; $hintLbl.ForeColor = $clrHint; $hintLbl.AutoSize = $false
-$hintLbl.Size = New-Object System.Drawing.Size(430, 16)
-$hintLbl.Location = New-Object System.Drawing.Point(10, 180)
-$hintLbl.TextAlign = "MiddleCenter"; $hintLbl.BackColor = [System.Drawing.Color]::Transparent
-$panel.Controls.Add($hintLbl)
-
-$hiddenAcceptBtn = New-Object System.Windows.Forms.Button
-$hiddenAcceptBtn.Size = New-Object System.Drawing.Size(1, 1)
-$hiddenAcceptBtn.Location = New-Object System.Drawing.Point(-100, -100)
-$hiddenAcceptBtn.TabStop = $false
-$panel.Controls.Add($hiddenAcceptBtn)
-$form.AcceptButton = $hiddenAcceptBtn
-$hiddenAcceptBtn.Add_Click({ if(-not $script:isRunning){ Execute-Selection } })
-
-function Update-Highlight {
-    for ($i = 0; $i -lt $script:optionCount; $i++) {
-        if ($i -eq $script:selectedIndex) {
-            $script:labelControls[$i].Text = "> " + $script:options[$i].Label
-            $script:labelControls[$i].ForeColor = $clrOptHi
-        } else {
-            $script:labelControls[$i].Text = "  " + $script:options[$i].Label
-            $script:labelControls[$i].ForeColor = $clrOptDim
-        }
-    }
-}
-
-function Execute-Selection {
-    if ($script:isRunning) { return }
-    $action = $script:options[$script:selectedIndex].Action
-    if ($action -eq "high") {
-        $script:isRunning = $true; $script:errorLog = @()
-        $total = $AllTweaks.Count; $step = 0
-        foreach ($key in $AllTweaks.Keys) {
-            $step++
-            $script:labelControls[0].Text = "> Running ($step/$total)..."
-            $script:labelControls[0].ForeColor = $clrOptHi
-            $script:labelControls[0].Refresh()
-            [System.Windows.Forms.Application]::DoEvents()
-            try { & $AllTweaks[$key] } catch { $script:errorLog += "$key : $($_.Exception.Message)" }
-        }
-        if ($script:errorLog.Count -gt 0) {
-            $script:labelControls[0].Text = "> Done - $($script:errorLog.Count) error(s)"
-        } else {
-            $script:labelControls[0].Text = "> Done - All $($AllTweaks.Count) tweaks applied"
-        }
-        $script:labelControls[0].Refresh()
-        try { [System.Media.SystemSounds]::Beep.Play() } catch {}
-        try { [Console]::Beep(1200, 300) } catch {}
-        $timer = New-Object System.Windows.Forms.Timer; $timer.Interval = 1500
-        $timer.Add_Tick({ $timer.Stop(); $timer.Dispose(); $script:isRunning = $false; Update-Highlight })
-        $timer.Start()
-    } else { $form.Close() }
-}
-
-$script:KeyHandler = {
-    param($s, $e)
-    if ($e.KeyCode -eq 'Escape') { if(-not $script:isRunning){ $form.Close() }; return }
-    if ($script:isRunning) { return }
-    switch ($e.KeyCode) {
-        'Up'   { $script:selectedIndex = ($script:selectedIndex - 1 + $script:optionCount) % $script:optionCount; Update-Highlight; $e.Handled = $true }
-        'Down' { $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount; Update-Highlight; $e.Handled = $true }
-    }
-}
-$form.Add_KeyDown($script:KeyHandler); $panel.Add_KeyDown($script:KeyHandler)
-
-$scrollHandler = {
-    param($s, $e)
-    if ($script:isRunning) { return }
-    if ($e.Delta -gt 0) { $script:selectedIndex = ($script:selectedIndex - 1 + $script:optionCount) % $script:optionCount }
-    else { $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount }
-    Update-Highlight
-}
-$form.Add_MouseWheel($scrollHandler); $panel.Add_MouseWheel($scrollHandler)
-foreach ($ctrl in $panel.Controls) { try { $ctrl.Add_MouseWheel($scrollHandler) } catch {} }
-
-$form.Add_Shown({ $panel.Focus() })
-Update-Highlight
-
+# ============================================================
+# SHOW FORM
+# ============================================================
 [System.Windows.Forms.Application]::Run($form)
