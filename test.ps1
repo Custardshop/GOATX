@@ -280,6 +280,7 @@ $Tweak_Services = {
 
 # ============================================================
 # [18] Junk and Log Cleanup
+# FIX: per-log timeout 3s to prevent hang on stuck logs
 # ============================================================
 $Tweak_JunkCleanup = {
     Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
@@ -289,12 +290,24 @@ $Tweak_JunkCleanup = {
     Stop-Service UsoSvc -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$env:WINDIR\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
     Start-Service wuauserv -ErrorAction SilentlyContinue
-    Get-WinEvent -ListLog * -ErrorAction SilentlyContinue | ForEach-Object { try { wevtutil.exe cl $_.LogName } catch {} }
+    # FIX: timeout 3s per log to prevent infinite hang
+    Get-WinEvent -ListLog * -ErrorAction SilentlyContinue |
+        Where-Object { $_.RecordCount -gt 0 -and $_.IsEnabled } |
+        ForEach-Object {
+            $logName = $_.LogName
+            $logJob = Start-Job -ScriptBlock {
+                param($ln)
+                wevtutil.exe cl $ln 2>$null
+            } -ArgumentList $logName
+            $done = Wait-Job $logJob -Timeout 3
+            if (-not $done) { Stop-Job $logJob -Force }
+            Remove-Job $logJob -Force -ErrorAction SilentlyContinue
+        }
     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
 }
 
 # ============================================================
-# [19] Interrupt Affinity (was [21])
+# [19] Interrupt Affinity
 # GPU = Core 1, NIC = Core 2, USB = Core 3
 # ============================================================
 $Tweak_InterruptAffinity = {
@@ -613,10 +626,15 @@ $Tweak_DiagnosticServices = {
 
 # ============================================================
 # [42] System Restore Off
+# FIX: timeout 10s for vssadmin to prevent hang on locked VSS
 # ============================================================
 $Tweak_SystemRestoreOff = {
     Disable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
-    vssadmin delete shadows /all /quiet 2>$null | Out-Null
+    # FIX: timeout 10s for vssadmin which can hang on locked VSS
+    $vssJob = Start-Job -ScriptBlock { vssadmin delete shadows /all /quiet 2>$null }
+    $done = Wait-Job $vssJob -Timeout 10
+    if (-not $done) { Stop-Job $vssJob -Force }
+    Remove-Job $vssJob -Force -ErrorAction SilentlyContinue
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v RPSessionInterval /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v DisableSR /t REG_DWORD /d 1 /f | Out-Null
 }
@@ -920,7 +938,6 @@ $Tweak_TCPKeepAlive = {
 
 # ============================================================
 # [63] MMCSS Deep Tuning
-# (formerly [65] — replaces the removed [19] Display Post Processing)
 # ============================================================
 $Tweak_MMCSSDeep = {
     $mmcss = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
@@ -1004,13 +1021,14 @@ $Tweak_NTFSDeep = {
 
 # ============================================================
 # [67] CPU Scheduling Deep
-# FIX: ย้าย Prefetcher/Superfetch logic ทั้งหมดมาที่นี่ (single source)
+# FIX: wrapped Get-PhysicalDisk in try-catch
 # ============================================================
 $Tweak_CPUScheduling = {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQ8Priority /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32PrioritySeparation /t REG_DWORD /d 38 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v SecondLevelDataCache /t REG_DWORD /d 0 /f | Out-Null
-    $hasHDD = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'HDD' }
+    # FIX: wrapped Get-PhysicalDisk in try-catch
+    try { $hasHDD = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'HDD' } } catch { $hasHDD = $null }
     if ($hasHDD) {
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnablePrefetcher /t REG_DWORD /d 3 /f | Out-Null
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
@@ -1125,7 +1143,7 @@ $Tweak_DWMOptimize = {
 }
 
 # ============================================================
-# MASTER TABLE — 75 TWEAKS (removed [19] Display Post + [67] PowerPlan)
+# MASTER TABLE - 75 TWEAKS
 # ============================================================
 $AllTweaks = [ordered]@{
     "[01] Kernel + Timer (TSC)"        = $Tweak_KernelTimer
