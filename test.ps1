@@ -1,14 +1,3 @@
-# ============================================================
-# PRIME Optimizer - 83 Tweaks - Full Fixed Version
-# ============================================================
-# Fixes applied:
-# - [18] Event Log cleanup: per-log timeout 3s
-# - [42] vssadmin shadows: timeout 10s
-# - Main loop: Start-Job + Wait-Job -Timeout 60 per tweak
-# - GUI: DoEvents() to prevent freeze
-# - Completion MessageBox
-# ============================================================
-
 $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -295,7 +284,6 @@ $Tweak_JunkCleanup = {
     Stop-Service UsoSvc -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$env:WINDIR\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
     Start-Service wuauserv -ErrorAction SilentlyContinue
-
     # FIX: timeout 3s per log to prevent infinite hang
     Get-WinEvent -ListLog * -ErrorAction SilentlyContinue |
         Where-Object { $_.RecordCount -gt 0 -and $_.IsEnabled } |
@@ -309,7 +297,6 @@ $Tweak_JunkCleanup = {
             if (-not $done) { Stop-Job $logJob -Force }
             Remove-Job $logJob -Force -ErrorAction SilentlyContinue
         }
-
     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
 }
 
@@ -637,13 +624,11 @@ $Tweak_DiagnosticServices = {
 # ============================================================
 $Tweak_SystemRestoreOff = {
     Disable-ComputerRestore -Drive "C:\" -ErrorAction SilentlyContinue
-
     # FIX: timeout 10s for vssadmin which can hang on locked VSS
     $vssJob = Start-Job -ScriptBlock { vssadmin delete shadows /all /quiet 2>$null }
     $done = Wait-Job $vssJob -Timeout 10
     if (-not $done) { Stop-Job $vssJob -Force }
     Remove-Job $vssJob -Force -ErrorAction SilentlyContinue
-
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v RPSessionInterval /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v DisableSR /t REG_DWORD /d 1 /f | Out-Null
 }
@@ -1321,7 +1306,7 @@ $Tweak_FocusAssist = {
 }
 
 # ============================================================
-# MASTER TABLE - 83 TWEAKS (COMPLETE)
+# MASTER TABLE - 83 TWEAKS
 # ============================================================
 $AllTweaks = [ordered]@{
     "[01] Kernel + Timer (TSC)"        = $Tweak_KernelTimer
@@ -1410,7 +1395,7 @@ $AllTweaks = [ordered]@{
 }
 
 # ============================================================
-# GUI FORM
+# GUI
 # ============================================================
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "PRIME Optimizer - 83 Tweaks"
@@ -1479,7 +1464,7 @@ $btnRun.Cursor = [System.Windows.Forms.Cursors]::Hand
 $form.Controls.Add($btnRun)
 
 # ============================================================
-# MAIN EXECUTION LOGIC (FIXED: timeout per tweak + DoEvents)
+# MAIN EXECUTION - Original style (direct invocation)
 # ============================================================
 $btnRun.Add_Click({
     $btnRun.Enabled = $false
@@ -1488,66 +1473,40 @@ $btnRun.Add_Click({
 
     $i = 0
     $total = $AllTweaks.Count
-    $failCount = 0
-    $timeoutCount = 0
 
     foreach ($key in $AllTweaks.Keys) {
         $i++
-
-        # Update GUI
         $lblStatus.Text = "[$i/$total] $key"
         $progressBar.Value = $i
         $logBox.AppendText("[$i/$total] $key ...")
         $logBox.ScrollToCaret()
-
-        # FIX: DoEvents to keep GUI responsive
         [System.Windows.Forms.Application]::DoEvents()
 
-        # FIX: Run each tweak in a background job with 60s timeout
-        $tweakCode = $AllTweaks[$key]
-        $tweakJob = Start-Job -ScriptBlock $tweakCode
-
-        $completed = Wait-Job $tweakJob -Timeout 60
-
-        if ($completed) {
-            $err = Receive-Job $tweakJob -ErrorAction SilentlyContinue 2>&1
-            if ($tweakJob.State -eq 'Failed') {
-                $logBox.AppendText(" FAIL`r`n")
-                $failCount++
-            } else {
-                $logBox.AppendText(" OK`r`n")
-            }
-        } else {
-            Stop-Job $tweakJob -Force
-            $logBox.AppendText(" TIMEOUT (skipped)`r`n")
-            $timeoutCount++
+        try {
+            & $AllTweaks[$key]
+            $logBox.AppendText(" OK`r`n")
+        } catch {
+            $logBox.AppendText(" FAIL`r`n")
         }
-        Remove-Job $tweakJob -Force -ErrorAction SilentlyContinue
         $logBox.ScrollToCaret()
         [System.Windows.Forms.Application]::DoEvents()
     }
 
-    # Done
-    $lblStatus.Text = "COMPLETE - OK: $($total - $failCount - $timeoutCount) | Fail: $failCount | Timeout: $timeoutCount"
+    $lblStatus.Text = "COMPLETE"
     $btnRun.Text = "REBOOT NOW"
     $btnRun.Enabled = $true
 
-    $logBox.AppendText("`r`n=== ALL 83 TWEAKS FINISHED ===`r`n")
-    $logBox.AppendText("Success: $($total - $failCount - $timeoutCount) / $total`r`n")
-    $logBox.AppendText("Failed: $failCount | Timed out: $timeoutCount`r`n")
-    $logBox.AppendText("Reboot recommended.`r`n")
+    $logBox.AppendText("`r`n=== ALL 83 TWEAKS FINISHED ===`r`nReboot recommended.`r`n")
     $logBox.ScrollToCaret()
 
-    # FIX: Completion MessageBox
     [System.Windows.Forms.MessageBox]::Show(
-        "All 83 tweaks completed.`r`n`r`nSuccess: $($total - $failCount - $timeoutCount)`r`nFailed: $failCount`r`nTimeout: $timeoutCount`r`n`r`nReboot recommended.",
+        "All 83 tweaks completed.`r`nReboot recommended.",
         "PRIME Optimizer",
         [System.Windows.Forms.MessageBoxButtons]::OK,
         [System.Windows.Forms.MessageBoxIcon]::Information
     )
 
     $btnRun.Add_Click({
-        $restartJob = Start-Job -ScriptBlock { shutdown /r /t 5 /f }
         $form.Close()
     })
 })
