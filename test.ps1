@@ -1,11 +1,11 @@
 #Requires -RunAsAdministrator
 # ═══════════════════════════════════════════════════════════════════
-# PRIME — Win10 22H2 Optimizer | All 75 Tweaks (Single File)
+# PRIME — Win10 22H2 Optimizer | GUI + CLI | All 75 Tweaks
 # Usage:
-#   .\prime_tweaks.ps1                 → Run ALL tweaks
-#   .\prime_tweaks.ps1 -TweakId 38     → Run single tweak by ID
-#   .\prime_tweaks.ps1 -TweakId 1,15,23 → Run multiple tweaks by IDs
-#   .\prime_tweaks.ps1 -List           → Show all tweak names
+#   .\prime.ps1                         → Launch GUI
+#   .\prime.ps1 -TweakId 38             → Run single tweak by ID
+#   .\prime.ps1 -TweakId 1,15,23        → Run multiple tweaks by IDs
+#   .\prime.ps1 -List                   → Show all tweak names
 # ═══════════════════════════════════════════════════════════════════
 
 param(
@@ -15,17 +15,82 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-# ── Admin check ──
+# ── Admin check with param passthrough ──
 $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "[!] Administrator required. Relaunching..." -ForegroundColor Yellow
+    $argList = @("-NoProfile","-ExecutionPolicy","Bypass")
+    if ($List) {
+        $argList += "-File"; $argList += "`"$PSCommandPath`""; $argList += "-List"
+    } elseif ($TweakId -and $TweakId.Count -gt 0) {
+        $argList += "-File"; $argList += "`"$PSCommandPath`""; $argList += "-TweakId"; $argList += ($TweakId -join ',')
+    } else {
+        $argList += "-WindowStyle"; $argList += "Hidden"
+        $argList += "-File"; $argList += "`"$PSCommandPath`""
+    }
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = "powershell.exe"
-    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" $(if($TweakId){'-TweakId '+($TweakId -join ',')})"
+    $psi.Arguments = $argList -join ' '
     $psi.Verb = "runas"
-    try { [System.Diagnostics.Process]::Start($psi) | Out-Null } catch { Write-Host "[X] UAC cancelled." -ForegroundColor Red }
+    if (-not $List -and (-not $TweakId -or $TweakId.Count -eq 0)) {
+        $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+    }
+    try { [System.Diagnostics.Process]::Start($psi) | Out-Null } catch {}
     exit
+}
+
+# ── List mode (CLI, no GUI) ──
+if ($List) {
+    $allNames = @(
+        "Kernel + Timer (TSC)","Timer Resolution","Process Priority","IRQ MSI Mode",
+        "Memory Management","Storage Optimizations","Input and USB","Nagle Algorithm",
+        "Visual Effects","GameBar DVR + GameMode OFF","Processor Power + HP Plan",
+        "CPU Core Parking","GPU Display (HAGS OFF)","Audio Latency",
+        "Network + DNS + Stack Reset","Privacy and Telemetry","Windows Services",
+        "Junk and Log Cleanup","Interrupt Affinity","NIC Advanced","Hyper-V and VBS",
+        "Timer Resolution Runtime","Spectre and Meltdown","Memory Compression",
+        "NVIDIA Low Latency","NVIDIA Shader + ReBAR","Exploit Protection",
+        "Windows Defender","Background Apps","Delivery Optimization","Device Power",
+        "GPU Cache Cleanup","MPO Disable","PCI-E ASPM","Connected Standby",
+        "Telemetry Tasks","Windows Ads and Tips","Additional Services",
+        "Overlay Killer (GameBar)","Network Noise","Diagnostic Services",
+        "System Restore Off","Additional Services v2","Spotlight and Clipboard",
+        "NVIDIA Telemetry","News + Copilot Disable","Storage Sense + Edge",
+        "Boot and Login Speed","Autologger Disable","Pagefile Optimize",
+        "SmartScreen and AutoPlay","Scheduled Tasks v2","LSO + RSS Queues",
+        "TCP Window BDP","WiFi Optimize","TCP Congestion","UDP Buffer",
+        "NIC Flow + RSS Core","QoS + DSCP","NIC Power Deep","DNS Cache + Flush",
+        "TCP KeepAlive + SYN","MMCSS Deep Tuning","NVIDIA Profile","USB Power Deep",
+        "NTFS Deep","CPU Scheduling Deep","VBS/HVCI Core Isolation","NVMe Deep",
+        "LargeSystemCache + IoPage","Misc Services","UWP Background Disable",
+        "ETW Session Disable","CSRSS Priority","DWM Optimization"
+    )
+    Write-Host ""
+    Write-Host "═══ PRIME Tweaks — All 75 Entries ═══" -ForegroundColor Cyan
+    for ($i = 0; $i -lt $allNames.Count; $i++) {
+        Write-Host ("  [{0:D2}] {1}" -f ($i+1), $allNames[$i]) -ForegroundColor Gray
+    }
+    Write-Host ""
+    exit
+}
+
+# ── Detect mode ──
+$guiMode = (-not $TweakId -or $TweakId.Count -eq 0)
+
+if ($guiMode) {
+    # Hide console window
+    Add-Type -Name Win32ShowWindow -Namespace Native -MemberDefinition @"
+[DllImport("user32.dll")]
+public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+[DllImport("kernel32.dll")]
+public static extern IntPtr GetConsoleWindow();
+"@
+    $consoleHandle = [Native.Win32ShowWindow]::GetConsoleWindow()
+    if ($consoleHandle -ne [IntPtr]::Zero) {
+        [Native.Win32ShowWindow]::ShowWindow($consoleHandle, 0) | Out-Null
+    }
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -38,7 +103,7 @@ function Tweak-01_KernelTimer {
     bcdedit /set tscsyncpolicy Enhanced | Out-Null
     bcdedit /set nx OptOut | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v DisablePagingExecutive /t REG_DWORD /d 1 /f | Out-Null
-    Write-Host "[01] Kernel + Timer (TSC) .............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[01] Kernel + Timer (TSC) .............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -46,7 +111,7 @@ function Tweak-01_KernelTimer {
 # ═══════════════════════════════════════════════════════════════════
 function Tweak-02_TimerResolution {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v GlobalTimerResolutionRequests /t REG_DWORD /d 1 /f | Out-Null
-    Write-Host "[02] Timer Resolution .................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[02] Timer Resolution .................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -65,7 +130,7 @@ function Tweak-03_ProcessPriority {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Background Only" /t REG_SZ /d False /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Clock Rate" /t REG_DWORD /d 10000 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\501a4d13-42af-4429-9fd1-a8218c268e20\ee12f2c1-98bb-455b-9e09-ae4c1e16cb45" /v Attributes /t REG_DWORD /d 2 /f | Out-Null
-    Write-Host "[03] Process Priority .................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[03] Process Priority .................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -81,7 +146,7 @@ function Tweak-04_IrqMsiMode {
             Set-ItemProperty -Path $affinityPath -Name DevicePriority -Value 3 -Type DWord -Force -ErrorAction SilentlyContinue
         }
     }
-    Write-Host "[04] IRQ MSI Mode ..................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[04] IRQ MSI Mode ..................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -94,7 +159,7 @@ function Tweak-05_MemoryManagement {
     powercfg -h off | Out-Null
     taskkill /f /im OneDrive.exe 2>$null | Out-Null
     reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v OneDrive /f 2>$null | Out-Null
-    Write-Host "[05] Memory Management ................ OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[05] Memory Management ................ OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -106,7 +171,7 @@ function Tweak-06_Storage {
     Get-Volume | Where-Object { $_.DriveType -eq 'Fixed' -and $_.DriveLetter } | ForEach-Object {
         Optimize-Volume -DriveLetter $_.DriveLetter -ReTrim -ErrorAction SilentlyContinue
     }
-    Write-Host "[06] Storage Optimizations ............ OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[06] Storage Optimizations ............ OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -127,7 +192,7 @@ function Tweak-07_InputUSB {
     reg add "HKCU\Control Panel\Accessibility\StickyKeys" /v Flags /t REG_SZ /d 506 /f | Out-Null
     reg add "HKCU\Control Panel\Accessibility\ToggleKeys" /v Flags /t REG_SZ /d 58 /f | Out-Null
     reg add "HKCU\Control Panel\Accessibility\MouseKeys" /v Flags /t REG_SZ /d 0 /f | Out-Null
-    Write-Host "[07] Input and USB .................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[07] Input and USB .................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -139,7 +204,7 @@ function Tweak-08_Nagle {
         Set-ItemProperty -Path $_.PSPath -Name TCPNoDelay -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $_.PSPath -Name TcpDelAckTicks -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
     }
-    Write-Host "[08] Nagle Algorithm .................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[08] Nagle Algorithm .................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -152,7 +217,7 @@ function Tweak-09_VisualEffects {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarAnimations /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 0 /f | Out-Null
     reg add "HKCU\Control Panel\Desktop" /v DragFullWindows /t REG_SZ /d 0 /f | Out-Null
-    Write-Host "[09] Visual Effects ................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[09] Visual Effects ................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -166,7 +231,7 @@ function Tweak-10_GameBarDVR {
     reg add "HKCU\Software\Microsoft\GameBar" /v AllowAutoGameMode /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\GameBar" /v AutoGameModeEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\GameBar" /v GamePanelStartupTipIndex /t REG_DWORD /d 3 /f | Out-Null
-    Write-Host "[10] GameBar DVR + GameMode OFF ....... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[10] GameBar DVR + GameMode OFF ....... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -180,7 +245,7 @@ function Tweak-11_ProcessorPower {
     powercfg /setactive SCHEME_CURRENT | Out-Null
     powercfg /hibernate off | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "[11] Processor Power .................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[11] Processor Power .................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -193,7 +258,7 @@ function Tweak-12_CoreParking {
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR HETEROCLASS1INITIALPERF 100 | Out-Null
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PROCESSOR HETEROCLASS0FLOORPERF 100 | Out-Null
     powercfg /setactive SCHEME_CURRENT | Out-Null
-    Write-Host "[12] CPU Core Parking ................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[12] CPU Core Parking ................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -204,7 +269,7 @@ function Tweak-13_GpuDisplay {
     reg add "HKLM\SOFTWARE\Microsoft\DirectX\GraphicsSettings" /v HwSchMode /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrLevel /t REG_DWORD /d 2 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrDelay /t REG_DWORD /d 60 /f | Out-Null
-    Write-Host "[13] GPU Display (HAGS OFF) ........... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[13] GPU Display (HAGS OFF) ........... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -218,7 +283,7 @@ function Tweak-14_AudioLatency {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v Priority /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "Scheduling Category" /t REG_SZ /d High /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Pro Audio" /v "SFIO Priority" /t REG_SZ /d High /f | Out-Null
-    Write-Host "[14] Audio Latency .................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[14] Audio Latency .................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -227,7 +292,6 @@ function Tweak-14_AudioLatency {
 function Tweak-15_NetworkDNS {
     netsh int ip reset 2>$null | Out-Null
     netsh winsock reset 2>$null | Out-Null
-
     netsh int tcp set global rss=enabled | Out-Null
     netsh int tcp set global autotuninglevel=normal | Out-Null
     netsh int tcp set global timestamps=disabled | Out-Null
@@ -237,7 +301,6 @@ function Tweak-15_NetworkDNS {
     netsh int tcp set global ecncapability=disabled | Out-Null
     netsh int tcp set global fastopen=enabled | Out-Null
     netsh int udp set global uro=disabled | Out-Null
-
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v NonBestEffortLimit /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TCPNoDelay /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpAckFrequency /t REG_DWORD /d 1 /f | Out-Null
@@ -254,11 +317,9 @@ function Tweak-15_NetworkDNS {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v FastCopyReceiveThreshold /t REG_DWORD /d 1536 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\QoS" /v "Do not use NLA" /t REG_SZ /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v EnableMulticast /t REG_DWORD /d 0 /f | Out-Null
-
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\services\NetBT\Parameters\Interfaces' -ErrorAction SilentlyContinue | ForEach-Object {
         Set-ItemProperty -Path $_.PSPath -Name NetbiosOptions -Value 2 -ErrorAction SilentlyContinue
     }
-
     Get-NetAdapter -Physical | Where-Object { $_.Status -ne 'Not Present' } | ForEach-Object {
         Disable-NetAdapterLso -Name $_.Name -ErrorAction SilentlyContinue
         Set-NetAdapterAdvancedProperty -Name $_.Name -RegistryKeyword '*InterruptModeration' -RegistryValue 0 -ErrorAction SilentlyContinue
@@ -267,11 +328,10 @@ function Tweak-15_NetworkDNS {
         Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses ('1.1.1.1','8.8.8.8') -ErrorAction SilentlyContinue
         Disable-NetAdapterPowerManagement -Name $_.Name -ErrorAction SilentlyContinue
     }
-
     ipconfig /flushdns | Out-Null
     ipconfig /release | Out-Null
     ipconfig /renew | Out-Null
-    Write-Host "[15] Network and DNS .................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[15] Network and DNS .................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -291,7 +351,7 @@ function Tweak-16_PrivacyTelemetry {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Start_TrackProgs /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\LocationAndSensors" /v DisableLocation /t REG_DWORD /d 1 /f | Out-Null
-    Write-Host "[16] Privacy and Telemetry ............ OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[16] Privacy and Telemetry ............ OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -302,7 +362,7 @@ function Tweak-17_Services {
     foreach ($s in $disableList) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
     $autoList = @('Audiosrv','AudioEndpointBuilder','Dhcp','NlaSvc','Netman','WlanSvc','RpcSs','EventLog','PlugPlay','LanmanWorkstation','LanmanServer','WSearch')
     foreach ($s in $autoList) { sc.exe config $s start= auto 2>$null | Out-Null; sc.exe start $s 2>$null | Out-Null }
-    Write-Host "[17] Windows Services ................ OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[17] Windows Services ................ OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -326,7 +386,7 @@ function Tweak-18_JunkCleanup {
             Remove-Job $logJob -Force -ErrorAction SilentlyContinue
         }
     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-    Write-Host "[18] Junk and Log Cleanup ............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[18] Junk and Log Cleanup ............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -351,7 +411,7 @@ function Tweak-19_InterruptAffinity {
             Set-ItemProperty -Path $affPath -Name 'AssignmentSetOverride' -Value 0x08 -Type DWord -Force -ErrorAction SilentlyContinue
         }
     }
-    Write-Host "[19] Interrupt Affinity ............... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[19] Interrupt Affinity ............... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -369,7 +429,7 @@ function Tweak-20_NICAdvanced {
         Disable-NetAdapterRsc -Name $n -ErrorAction SilentlyContinue
         Set-NetAdapterPowerManagement -Name $n -WakeOnMagicPacket Disabled -WakeOnPattern Disabled -ErrorAction SilentlyContinue
     }
-    Write-Host "[20] NIC Advanced ..................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[20] NIC Advanced ..................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -382,7 +442,7 @@ function Tweak-21_HyperV {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\LSA" /v LsaCfgFlags /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\KernelShadowStacks" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "[21] Hyper-V and VBS ................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[21] Hyper-V and VBS ................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -409,7 +469,7 @@ $c=0;[W]::NtSetTimerResolution(5000,$true,[ref]$c)
 while($true){Start-Sleep -Seconds 120}
 '@ | Out-File $helperPath -Encoding Unicode -Force
     schtasks /Create /TN "GOATX_TimerResolution" /TR "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$helperPath`"" /SC ONLOGON /RL HIGHEST /F 2>$null | Out-Null
-    Write-Host "[22] Timer Resolution Runtime ......... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[22] Timer Resolution Runtime ......... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -418,7 +478,7 @@ while($true){Start-Sleep -Seconds 120}
 function Tweak-23_SpectreMeltdown {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v FeatureSettingsOverride /t REG_DWORD /d 3 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v FeatureSettingsOverrideMask /t REG_DWORD /d 3 /f | Out-Null
-    Write-Host "[23] Spectre and Meltdown ............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[23] Spectre and Meltdown ............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -426,7 +486,7 @@ function Tweak-23_SpectreMeltdown {
 # ═══════════════════════════════════════════════════════════════════
 function Tweak-24_MemCompression {
     Disable-MMAgent -MemoryCompression -ErrorAction SilentlyContinue
-    Write-Host "[24] Memory Compression ............... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[24] Memory Compression ............... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -451,7 +511,7 @@ function Tweak-25_NvidiaLowLatency {
         Set-ItemProperty -Path $_.PSPath -Name 'EnableDeepIdlePreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $_.PSPath -Name 'EnableAsyncMidBufferPreemption' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue
     }
-    Write-Host "[25] NVIDIA Low Latency ............... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[25] NVIDIA Low Latency ............... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -466,7 +526,7 @@ function Tweak-26_NvidiaShader {
         Set-ItemProperty -Path $_.PSPath -Name 'RMFrmForceMaxFramesToRender' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
         Set-ItemProperty -Path $_.PSPath -Name 'RMEnableReBar' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
     }
-    Write-Host "[26] NVIDIA Shader + ReBAR ............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[26] NVIDIA Shader + ReBAR ............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -476,7 +536,7 @@ function Tweak-27_ExploitProtection {
     Set-ProcessMitigation -System -Disable CFG -ErrorAction SilentlyContinue
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel" /v DisableExceptionChainValidation /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v MoveImages /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "[27] Exploit Protection ............... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[27] Exploit Protection ............... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -491,7 +551,7 @@ function Tweak-28_DefenderRealtime {
     Set-MpPreference -MAPSReporting 0 -ErrorAction SilentlyContinue
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender" /v DisableAntiSpyware /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection" /v DisableRealtimeMonitoring /t REG_DWORD /d 1 /f | Out-Null
-    Write-Host "[28] Windows Defender ................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[28] Windows Defender ................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -500,7 +560,7 @@ function Tweak-28_DefenderRealtime {
 function Tweak-29_BackgroundApps {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy" /v LetAppsRunInBackground /t REG_DWORD /d 2 /f | Out-Null
-    Write-Host "[29] Background Apps .................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[29] Background Apps .................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -511,7 +571,7 @@ function Tweak-30_DeliveryOptimization {
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" /v DODownloadMode /t REG_DWORD /d 0 /f | Out-Null
     Stop-Service DoSvc -Force -ErrorAction SilentlyContinue
     sc.exe config DoSvc start= disabled 2>$null | Out-Null
-    Write-Host "[30] Delivery Optimization ............ OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[30] Delivery Optimization ............ OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -523,7 +583,7 @@ function Tweak-31_DevicePower {
         if (Test-Path "$regPath\WDF") { Set-ItemProperty -Path "$regPath\WDF" -Name 'IdleInWorkingState' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue }
     }
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\stornvme\Parameters\Device" /v IdlePowerStateEnabled /t REG_DWORD /d 0 /f 2>$null | Out-Null
-    Write-Host "[31] Device Power ..................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[31] Device Power ..................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -535,7 +595,7 @@ function Tweak-32_GpuCacheCleanup {
     Remove-Item -Path "$env:LOCALAPPDATA\AMD\DxCache\*" -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$env:LOCALAPPDATA\D3DSCache\*" -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "$env:WINDIR\SoftwareDistribution\DeliveryOptimization\*" -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "[32] GPU Cache Cleanup ................ OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[32] GPU Cache Cleanup ................ OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -543,7 +603,7 @@ function Tweak-32_GpuCacheCleanup {
 # ═══════════════════════════════════════════════════════════════════
 function Tweak-33_MPODisable {
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Dwm" /v OverlayTestMode /t REG_DWORD /d 5 /f | Out-Null
-    Write-Host "[33] MPO Disable ...................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[33] MPO Disable ...................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -555,7 +615,7 @@ function Tweak-34_PciEAspm {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PnP\Pci" /v DisableASPM /t REG_DWORD /d 1 /f 2>$null | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\501a4d13-42af-4429-9fd1-a8218c268e20\ee12f2c1-98bb-455b-9e09-ae4c1e16cb45" /v Attributes /t REG_DWORD /d 2 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\stornvme\Parameters\Device" /v NvmeDisableASPM /t REG_DWORD /d 1 /f 2>$null | Out-Null
-    Write-Host "[34] PCI-E ASPM ....................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[34] PCI-E ASPM ....................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -565,7 +625,7 @@ function Tweak-35_ConnectedStandby {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v CsEnabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v PlatformAoAcOverride /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Power" /v AwayModeEnabled /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "[35] Connected Standby ................ OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[35] Connected Standby ................ OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -593,7 +653,7 @@ function Tweak-36_TelemetryTasks {
         '\Microsoft\Windows\Windows Filtering Platform\BfeOnServiceStartTypeChange'
     )
     foreach ($t in $tasks) { Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
-    Write-Host "[36] Telemetry Tasks .................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[36] Telemetry Tasks .................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -615,7 +675,7 @@ function Tweak-37_WindowsAdsTips {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v ShowInfoBar /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableWindowsConsumerFeatures /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\CloudContent" /v DisableSoftLanding /t REG_DWORD /d 1 /f | Out-Null
-    Write-Host "[37] Windows Ads and Tips ............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[37] Windows Ads and Tips ............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -630,7 +690,7 @@ function Tweak-38_AdditionalServices {
         'MessagingService','PimIndexMaintenanceSvc','OneSyncSvc','AJRouter'
     )
     foreach ($s in $extraDisable) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
-    Write-Host "[38] Additional Services .............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[38] Additional Services .............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -638,7 +698,7 @@ function Tweak-38_AdditionalServices {
 # ═══════════════════════════════════════════════════════════════════
 function Tweak-39_OverlayKiller {
     reg add "HKCU\Software\Microsoft\GameBar" /v UseNexusForGameBarEnabled /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "[39] Overlay Killer (GameBar) ......... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[39] Overlay Killer (GameBar) ......... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -653,7 +713,7 @@ function Tweak-40_NetworkNoise {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\SSDPSRV" /v Start /t REG_DWORD /d 4 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\fdPHost" /v Start /t REG_DWORD /d 4 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\FDResPub" /v Start /t REG_DWORD /d 4 /f | Out-Null
-    Write-Host "[40] Network Noise .................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[40] Network Noise .................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -666,7 +726,7 @@ function Tweak-41_DiagnosticServices {
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v LoggingDisabled /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v AutoApproveOSDumps /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "[41] Diagnostic Services .............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[41] Diagnostic Services .............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -680,7 +740,7 @@ function Tweak-42_SystemRestoreOff {
     Remove-Job $vssJob -Force -ErrorAction SilentlyContinue
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v RPSessionInterval /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" /v DisableSR /t REG_DWORD /d 1 /f | Out-Null
-    Write-Host "[42] System Restore Off ............... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[42] System Restore Off ............... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -693,7 +753,7 @@ function Tweak-43_AdditionalServices2 {
         'WalletService','DsRoleSvc','NcaSvc','NcdAutoSetup','icssvc','SEMgrSvc'
     )
     foreach ($s in $extraDisable2) { sc.exe stop $s 2>$null | Out-Null; sc.exe config $s start= disabled 2>$null | Out-Null }
-    Write-Host "[43] Additional Services v2 ........... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[43] Additional Services v2 ........... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -710,7 +770,7 @@ function Tweak-44_SpotlightClipboard {
     sc.exe stop PhoneSvc 2>$null | Out-Null; sc.exe config PhoneSvc start= disabled 2>$null | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableActivityFeed /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v PublishUserActivities /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "[44] Spotlight and Clipboard .......... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[44] Spotlight and Clipboard .......... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -728,7 +788,7 @@ function Tweak-45_NvidiaTelemetry {
     foreach ($t in $nvTasks) { Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
     $nvTelemetryPath = "HKLM:\SOFTWARE\NVIDIA Corporation\NvControlPanel2\Client"
     if (Test-Path $nvTelemetryPath) { Set-ItemProperty -Path $nvTelemetryPath -Name 'OptInOrOutPreference' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue }
-    Write-Host "[45] NVIDIA Telemetry ................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[45] NVIDIA Telemetry ................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -742,7 +802,7 @@ function Tweak-46_CopilotRecall {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v TaskbarDa /t REG_DWORD /d 0 /f | Out-Null
     Stop-Process -Name "Widgets" -Force -ErrorAction SilentlyContinue
     Stop-Process -Name "WidgetService" -Force -ErrorAction SilentlyContinue
-    Write-Host "[46] News + Copilot Disable ........... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[46] News + Copilot Disable ........... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -760,7 +820,7 @@ function Tweak-47_StorageEdge {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\MicrosoftEdge\Main" /v AllowPrelaunch /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\MicrosoftEdge\TabPreloader" /v AllowTabPreloading /t REG_DWORD /d 0 /f | Out-Null
     Stop-Process -Name "msedge" -Force -ErrorAction SilentlyContinue
-    Write-Host "[47] Storage Sense + Edge ............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[47] Storage Sense + Edge ............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -772,7 +832,7 @@ function Tweak-48_BootLoginSpeed {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Personalization" /v NoLockScreen /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v DisableLogonBackgroundImage /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" /v DisableStatusMessages /t REG_DWORD /d 1 /f | Out-Null
-    Write-Host "[48] Boot and Login Speed ............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[48] Boot and Login Speed ............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -793,7 +853,7 @@ function Tweak-49_AutologgerDisable {
     reg add "HKLM\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\config" /v AutoConnectAllowedOEM /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowWiFiHotSpotReporting" /v Value /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\PolicyManager\default\WiFi\AllowAutoConnectToWiFiSenseHotspots" /v Value /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "[49] Autologger Disable ............... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[49] Autologger Disable ............... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -814,7 +874,7 @@ function Tweak-50_PagefileOptimize {
         $obj = Get-WmiObject -Query "SELECT * FROM Win32_Volume WHERE DriveLetter='$drive'"
         if ($obj) { $obj.IndexingEnabled = $false; $obj.Put() | Out-Null }
     }
-    Write-Host "[50] Pagefile Optimize ................ OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[50] Pagefile Optimize ................ OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -828,7 +888,7 @@ function Tweak-51_SmartScreen {
     reg add "HKLM\SOFTWARE\Microsoft\Windows Script Host\Settings" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers" /v DisableAutoplay /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" /v NoDriveTypeAutoRun /t REG_DWORD /d 255 /f | Out-Null
-    Write-Host "[51] SmartScreen and AutoPlay ......... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[51] SmartScreen and AutoPlay ......... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -850,7 +910,7 @@ function Tweak-52_ScheduledTasks2 {
     foreach ($t in $tasks) { Disable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null }
     sc.exe stop edgeupdate 2>$null | Out-Null; sc.exe config edgeupdate start= disabled 2>$null | Out-Null
     sc.exe stop edgeupdatem 2>$null | Out-Null; sc.exe config edgeupdatem start= disabled 2>$null | Out-Null
-    Write-Host "[52] Scheduled Tasks v2 ............... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[52] Scheduled Tasks v2 ............... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -865,7 +925,7 @@ function Tweak-53_LSOandRSS {
         try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*ReceiveBuffers' -RegistryValue 2048 -ErrorAction SilentlyContinue } catch {}
         try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*TransmitBuffers' -RegistryValue 2048 -ErrorAction SilentlyContinue } catch {}
     }
-    Write-Host "[53] LSO + RSS Queues ................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[53] LSO + RSS Queues ................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -880,7 +940,7 @@ function Tweak-54_TCPWindowTuning {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxHashTableSize /t REG_DWORD /d 65536 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DefaultReceiveWindow /t REG_DWORD /d 65536 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\AFD\Parameters" /v DefaultSendWindow /t REG_DWORD /d 65536 /f | Out-Null
-    Write-Host "[54] TCP Window BDP .................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[54] TCP Window BDP .................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -898,7 +958,7 @@ function Tweak-55_WiFiOptimize {
     }
     reg add "HKLM\SOFTWARE\Microsoft\WcmSvc\wifinetworkmanager\config" /v AutoConnectAllowedOEM /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WcmSvc\GroupPolicy" /v fMinimizeConnections /t REG_DWORD /d 1 /f | Out-Null
-    Write-Host "[55] WiFi Optimize ................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[55] WiFi Optimize ................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -911,7 +971,7 @@ function Tweak-56_TCPCongestion {
     netsh int tcp set supplemental template=Datacenter congestionprovider=cubic | Out-Null
     netsh int tcp set supplemental template=Datacenter initialrto=750 | Out-Null
     netsh int tcp set supplemental template=Datacenter icw=10 | Out-Null
-    Write-Host "[56] TCP Congestion ................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[56] TCP Congestion ................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -923,7 +983,7 @@ function Tweak-57_UDPBuffer {
     netsh int udp set global uro=disabled | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxForwardBufferMemory /t REG_DWORD /d 65536 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v MaxNumForwardPackets /t REG_DWORD /d 65536 /f | Out-Null
-    Write-Host "[57] UDP Buffer ....................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[57] UDP Buffer ....................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -938,7 +998,7 @@ function Tweak-58_NICFlowControl {
         try { Set-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*MaxRssProcessors' -RegistryValue $cores -ErrorAction SilentlyContinue } catch {}
         try { Disable-NetAdapterBinding -Name $n -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue } catch {}
     }
-    Write-Host "[58] NIC Flow + RSS Core .............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[58] NIC Flow + RSS Core .............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -947,7 +1007,7 @@ function Tweak-58_NICFlowControl {
 function Tweak-59_QoS {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Psched" /v NonBestEffortLimit /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v DefaultTOSValue /t REG_DWORD /d 184 /f | Out-Null
-    Write-Host "[59] QoS + DSCP ...................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[59] QoS + DSCP ...................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -966,7 +1026,7 @@ function Tweak-60_NICPowerDeep {
     }
     powercfg /setacvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 0 | Out-Null
     powercfg /setactive SCHEME_CURRENT | Out-Null
-    Write-Host "[60] NIC Power Deep ................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[60] NIC Power Deep ................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -981,7 +1041,7 @@ function Tweak-61_DNSCache {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Dnscache\Parameters" /v NegativeSOACacheTime /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient" /v EnableMulticast /t REG_DWORD /d 0 /f | Out-Null
     Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\services\NetBT\Parameters\Interfaces' -ErrorAction SilentlyContinue | ForEach-Object { Set-ItemProperty -Path $_.PSPath -Name NetbiosOptions -Value 2 -ErrorAction SilentlyContinue }
-    Write-Host "[61] DNS Cache + Flush ................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[61] DNS Cache + Flush ................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -993,7 +1053,7 @@ function Tweak-62_TCPKeepAlive {
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpNumConnections /t REG_DWORD /d 16777214 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v SynAttackProtect /t REG_DWORD /d 1 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" /v TcpMaxConnectResponseRetransmissions /t REG_DWORD /d 2 /f | Out-Null
-    Write-Host "[62] TCP KeepAlive + SYN .............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[62] TCP KeepAlive + SYN .............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1028,7 +1088,7 @@ function Tweak-63_MMCSSDeep {
     $audioTask = "$mmcss\Tasks\Audio"
     reg add "$audioTask" /v Affinity /t REG_DWORD /d 7 /f | Out-Null
     reg add "$audioTask" /v "Scheduling Category" /t REG_SZ /d Medium /f | Out-Null
-    Write-Host "[63] MMCSS Deep Tuning ............... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[63] MMCSS Deep Tuning ............... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1050,7 +1110,7 @@ function Tweak-64_NvidiaProfile {
     if (-not (Test-Path $nvGlobal)) { New-Item -Path $nvGlobal -Force -ErrorAction SilentlyContinue | Out-Null }
     Set-ItemProperty -Path $nvGlobal -Name 'DisablePState' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
     Set-ItemProperty -Path $nvGlobal -Name 'DisableDynamicPstate' -Value 1 -Type DWord -Force -ErrorAction SilentlyContinue
-    Write-Host "[64] NVIDIA Profile ................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[64] NVIDIA Profile ................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1067,7 +1127,7 @@ function Tweak-65_USBPowerDeep {
         if (Test-Path "$regPath\WDF") { Set-ItemProperty -Path "$regPath\WDF" -Name 'IdleInWorkingState' -Value 0 -Type DWord -Force -ErrorAction SilentlyContinue }
     }
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\USB" /v DisableSelectiveSuspend /t REG_DWORD /d 1 /f | Out-Null
-    Write-Host "[65] USB Power Deep ................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[65] USB Power Deep ................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1080,7 +1140,7 @@ function Tweak-66_NTFSDeep {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v PathCache /t REG_DWORD /d 128 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v Win31FileSystem /t REG_DWORD /d 0 /f | Out-Null
     sc.exe stop EFS 2>$null | Out-Null; sc.exe config EFS start= disabled 2>$null | Out-Null
-    Write-Host "[66] NTFS Deep ........................ OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[66] NTFS Deep ........................ OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1098,7 +1158,7 @@ function Tweak-67_CPUScheduling {
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnablePrefetcher /t REG_DWORD /d 0 /f | Out-Null
         reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnableSuperfetch /t REG_DWORD /d 0 /f | Out-Null
     }
-    Write-Host "[67] CPU Scheduling Deep .............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[67] CPU Scheduling Deep .............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1111,7 +1171,7 @@ function Tweak-68_VBSHVCI {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\KernelShadowStacks" /v Enabled /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\LSA" /v LsaCfgFlags /t REG_DWORD /d 0 /f | Out-Null
     bcdedit /set vsmlaunchtype Off 2>$null | Out-Null
-    Write-Host "[68] VBS/HVCI Core Isolation .......... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[68] VBS/HVCI Core Isolation .......... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1129,7 +1189,7 @@ function Tweak-69_NVMeDeep {
         Set-ItemProperty -Path $affPath -Name 'AssignmentSetOverride' -Value 0x02 -Type DWord -Force -ErrorAction SilentlyContinue
     }
     reg add "HKLM\SYSTEM\CurrentControlSet\Services\stornvme\Parameters" /v IoTimeoutValue /t REG_DWORD /d 255 /f 2>$null | Out-Null
-    Write-Host "[69] NVMe Deep ....................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[69] NVMe Deep ....................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1142,7 +1202,7 @@ function Tweak-70_LargeSystemCache {
     $ramMB = [math]::Round((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory / 1MB)
     $ioLock = [math]::Round($ramMB * 0.75 * 4096)
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v IoPageLockLimit /t REG_DWORD /d $ioLock /f | Out-Null
-    Write-Host "[70] LargeSystemCache + IoPage ........ OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[70] LargeSystemCache + IoPage ........ OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1156,7 +1216,7 @@ function Tweak-71_MiscServices {
     sc.exe stop lfsvc 2>$null | Out-Null; sc.exe config lfsvc start= disabled 2>$null | Out-Null
     sc.exe stop WalletService 2>$null | Out-Null; sc.exe config WalletService start= disabled 2>$null | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\CDP" /v RomeSdkConsumerUserSettings /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "[71] Misc Services ................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[71] Misc Services ................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1180,7 +1240,7 @@ function Tweak-72_UWPBackgroundDisable {
         reg add "$appPath" /v Disabled /t REG_DWORD /d 1 /f 2>$null | Out-Null
         reg add "$appPath" /v DisabledByUser /t REG_DWORD /d 1 /f 2>$null | Out-Null
     }
-    Write-Host "[72] UWP Background Disable ........... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[72] UWP Background Disable ........... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1189,7 +1249,7 @@ function Tweak-72_UWPBackgroundDisable {
 function Tweak-73_ETWDisable {
     $etwSessions = @('DiagLog','Diagtrack-Listener','WiFiSession','UserNotPresentTraceSession','NtfsLog')
     foreach ($session in $etwSessions) { reg add "HKLM\SYSTEM\CurrentControlSet\Control\WMI\Autologger\$session" /v Start /t REG_DWORD /d 0 /f 2>$null | Out-Null }
-    Write-Host "[73] ETW Session Disable .............. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[73] ETW Session Disable .............. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1198,7 +1258,7 @@ function Tweak-73_ETWDisable {
 function Tweak-74_CSRSSPriority {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\csrss.exe\PerfOptions" /v CpuPriorityClass /t REG_DWORD /d 4 /f 2>$null | Out-Null
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\csrss.exe\PerfOptions" /v IoPriority /t REG_DWORD /d 3 /f 2>$null | Out-Null
-    Write-Host "[74] CSRSS Priority ................... OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[74] CSRSS Priority ................... OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1210,7 +1270,7 @@ function Tweak-75_DWMOptimize {
     reg add "HKCU\Software\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /t REG_DWORD /d 0 /f | Out-Null
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f | Out-Null
-    Write-Host "[75] DWM Optimization ................. OK" -ForegroundColor Green
+    if (-not $guiMode) { Write-Host "[75] DWM Optimization ................. OK" -ForegroundColor Green }
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1295,50 +1355,202 @@ $TweakMap = [ordered]@{
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# EXECUTION LOGIC
+# EXECUTION — GUI or CLI
 # ═══════════════════════════════════════════════════════════════════
 
-# -- List mode --
-if ($List) {
-    Write-Host ""
-    Write-Host "═══ PRIME Tweaks — All 75 Entries ═══" -ForegroundColor Cyan
-    foreach ($id in $TweakMap.Keys) {
-        Write-Host ("  [{0:D2}] {1}" -f $id, $TweakMap[$id].Name) -ForegroundColor Gray
+if ($guiMode) {
+    # ───────────────────────────────────────────────
+    # GUI MODE (from backup GOATX)
+    # ───────────────────────────────────────────────
+    $script:selectedIndex = 0
+    $script:isRunning     = $false
+    $script:optionCount   = 2
+    $script:labelControls = @()
+    $script:errorLog      = @()
+    $script:options = @(
+        @{ Label = "[1] High"; Action = "high" }
+        @{ Label = "[2] Exit"; Action = "exit" }
+    )
+
+    $script:GradBright = @(
+        [System.Drawing.Color]::FromArgb(80, 200, 255),
+        [System.Drawing.Color]::FromArgb(180, 120, 255),
+        [System.Drawing.Color]::FromArgb(255, 120, 180)
+    )
+    $script:GradMid = @(
+        [System.Drawing.Color]::FromArgb(100, 180, 220),
+        [System.Drawing.Color]::FromArgb(160, 130, 220),
+        [System.Drawing.Color]::FromArgb(220, 140, 190)
+    )
+    $script:GradDim = @(
+        [System.Drawing.Color]::FromArgb(60, 110, 140),
+        [System.Drawing.Color]::FromArgb(110, 70, 140),
+        [System.Drawing.Color]::FromArgb(140, 70, 100)
+    )
+    $script:GradPos = @(0.0, 0.5, 1.0)
+
+    $clrBg   = [System.Drawing.Color]::Black
+    $clrHint = [System.Drawing.Color]::FromArgb(120, 120, 120)
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text            = "PRIME"
+    $form.StartPosition   = "CenterScreen"
+    $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
+    $form.MaximizeBox     = $false
+    $form.BackColor       = $clrBg
+    $form.TopMost         = $true
+    $form.KeyPreview      = $true
+    $form.Opacity         = 0.85
+    $form.ClientSize      = New-Object System.Drawing.Size(450, 235)
+
+    $panel = New-Object System.Windows.Forms.Panel
+    $panel.Dock      = "Fill"
+    $panel.BackColor = $clrBg
+    $panel.TabStop   = $true
+    $form.Controls.Add($panel)
+
+    function New-GradientLabel {
+        param([string]$text,[float]$fontSize,[System.Drawing.FontStyle]$style,[System.Drawing.Color[]]$colors,[float[]]$positions,[int]$x,[int]$y,[int]$w,[int]$h)
+        $pnl = New-Object System.Windows.Forms.Panel
+        $pnl.Size = New-Object System.Drawing.Size($w,$h)
+        $pnl.Location = New-Object System.Drawing.Point($x,$y)
+        $pnl.BackColor = [System.Drawing.Color]::Transparent
+        $pnl.Tag = @{ Text=$text; FontSize=$fontSize; Style=$style; Colors=$colors; Positions=$positions }
+        $pnl.Add_Paint({
+            param($s,$e)
+            $dp=$s.Tag; $font=New-Object System.Drawing.Font("Consolas",$dp.FontSize,$dp.Style)
+            $colors=$dp.Colors; $pos=$dp.Positions
+            $e.Graphics.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $e.Graphics.TextRenderingHint=[System.Drawing.Text.TextRenderingHint]::AntiAlias
+            $brush=New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.Point(0,0)),(New-Object System.Drawing.Point($s.Width,0)),$colors[0],$colors[$colors.Length-1])
+            if($colors.Length-gt 2){$blend=New-Object System.Drawing.Drawing2D.ColorBlend;$blend.Colors=$colors;$blend.Positions=$pos;$brush.InterpolationColors=$blend}
+            $sf=New-Object System.Drawing.StringFormat;$sf.Alignment=[System.Drawing.StringAlignment]::Center;$sf.LineAlignment=[System.Drawing.StringAlignment]::Center
+            $rect=New-Object System.Drawing.RectangleF(0,0,$s.Width,$s.Height)
+            $e.Graphics.DrawString($dp.Text,$font,$brush,$rect,$sf)
+            $brush.Dispose();$font.Dispose();$sf.Dispose()
+        })
+        $panel.Controls.Add($pnl); return $pnl
     }
-    Write-Host ""
-    exit
-}
 
-# -- Header --
-Write-Host ""
-Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host " PRIME — Win10 22H2 Optimizer" -ForegroundColor Cyan
-Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host ""
+    New-GradientLabel -text "P R I M E" -fontSize 22 -style ([System.Drawing.FontStyle]::Bold) -colors $script:GradBright -positions $script:GradPos -x 10 -y 20 -w 430 -h 42 | Out-Null
+    New-GradientLabel -text "[+] Win10 22H2 Optimized [+]" -fontSize 10 -style ([System.Drawing.FontStyle]::Regular) -colors $script:GradMid -positions $script:GradPos -x 10 -y 66 -w 430 -h 22 | Out-Null
 
-$errorLog = @()
-$runAll = $false
+    $clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)
+    $clrOptDim = [System.Drawing.Color]::FromArgb(90, 75, 110)
+    $fontOpt = New-Object System.Drawing.Font("Consolas", 12)
+    $optStartY = 104; $optSpacing = 32
 
-if (-not $TweakId -or $TweakId.Count -eq 0) {
-    $runAll = $true
-}
+    for ($i = 0; $i -lt $script:optionCount; $i++) {
+        $lbl = New-Object System.Windows.Forms.Label
+        $lbl.Text = if ($i -eq 0) { "> " + $script:options[$i].Label } else { "  " + $script:options[$i].Label }
+        $lbl.Font = $fontOpt; $lbl.ForeColor = if ($i -eq 0) { $clrOptHi } else { $clrOptDim }
+        $lbl.AutoSize = $false; $lbl.Size = New-Object System.Drawing.Size(430, 28)
+        $lbl.Location = New-Object System.Drawing.Point(10, ($optStartY + $i * $optSpacing))
+        $lbl.TextAlign = "MiddleLeft"; $lbl.BackColor = [System.Drawing.Color]::Transparent
+        $lbl.Cursor = [System.Windows.Forms.Cursors]::Hand; $lbl.Tag = $i
+        $lbl.Add_Click({ param($s,$e); if(-not $script:isRunning){ $script:selectedIndex=[int]$s.Tag; Update-Highlight; Execute-Selection } })
+        $panel.Controls.Add($lbl); $script:labelControls += $lbl
+    }
 
-$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $fontHint = New-Object System.Drawing.Font("Consolas", 8)
+    $hintLbl = New-Object System.Windows.Forms.Label
+    $hintLbl.Text = "Arrow keys to navigate, Enter to select"
+    $hintLbl.Font = $fontHint; $hintLbl.ForeColor = $clrHint; $hintLbl.AutoSize = $false
+    $hintLbl.Size = New-Object System.Drawing.Size(430, 16)
+    $hintLbl.Location = New-Object System.Drawing.Point(10, 180)
+    $hintLbl.TextAlign = "MiddleCenter"; $hintLbl.BackColor = [System.Drawing.Color]::Transparent
+    $panel.Controls.Add($hintLbl)
 
-if ($runAll) {
-    Write-Host ">> Running ALL 75 tweaks..." -ForegroundColor Yellow
-    Write-Host ""
-    foreach ($id in $TweakMap.Keys) {
-        try {
-            & $TweakMap[$id].Fn
-        } catch {
-            $errorLog += "[{0:D2}] {1} : {2}" -f $id, $TweakMap[$id].Name, $_.Exception.Message
-            Write-Host ("[{0:D2}] {1} .............. FAIL: {2}" -f $id, $TweakMap[$id].Name, $_.Exception.Message) -ForegroundColor Red
+    $hiddenAcceptBtn = New-Object System.Windows.Forms.Button
+    $hiddenAcceptBtn.Size = New-Object System.Drawing.Size(1, 1)
+    $hiddenAcceptBtn.Location = New-Object System.Drawing.Point(-100, -100)
+    $hiddenAcceptBtn.TabStop = $false
+    $panel.Controls.Add($hiddenAcceptBtn)
+    $form.AcceptButton = $hiddenAcceptBtn
+    $hiddenAcceptBtn.Add_Click({ if(-not $script:isRunning){ Execute-Selection } })
+
+    function Update-Highlight {
+        for ($i = 0; $i -lt $script:optionCount; $i++) {
+            if ($i -eq $script:selectedIndex) {
+                $script:labelControls[$i].Text = "> " + $script:options[$i].Label
+                $script:labelControls[$i].ForeColor = $clrOptHi
+            } else {
+                $script:labelControls[$i].Text = "  " + $script:options[$i].Label
+                $script:labelControls[$i].ForeColor = $clrOptDim
+            }
         }
     }
+
+    function Execute-Selection {
+        if ($script:isRunning) { return }
+        $action = $script:options[$script:selectedIndex].Action
+        if ($action -eq "high") {
+            $script:isRunning = $true; $script:errorLog = @()
+            $total = $TweakMap.Count; $step = 0
+            foreach ($id in $TweakMap.Keys) {
+                $step++
+                $script:labelControls[0].Text = "> Running ($step/$total) $($TweakMap[$id].Name)..."
+                $script:labelControls[0].ForeColor = $clrOptHi
+                $script:labelControls[0].Refresh()
+                [System.Windows.Forms.Application]::DoEvents()
+                try { & $TweakMap[$id].Fn } catch { $script:errorLog += "[{0:D2}] {1} : {2}" -f $id, $TweakMap[$id].Name, $_.Exception.Message }
+            }
+            if ($script:errorLog.Count -gt 0) {
+                $script:labelControls[0].Text = "> Done - $($script:errorLog.Count) error(s)"
+            } else {
+                $script:labelControls[0].Text = "> Done - All $($TweakMap.Count) tweaks applied"
+            }
+            $script:labelControls[0].Refresh()
+            try { [System.Media.SystemSounds]::Beep.Play() } catch {}
+            try { [Console]::Beep(1200, 300) } catch {}
+            $timer = New-Object System.Windows.Forms.Timer; $timer.Interval = 1500
+            $timer.Add_Tick({ $timer.Stop(); $timer.Dispose(); $script:isRunning = $false; Update-Highlight })
+            $timer.Start()
+        } else { $form.Close() }
+    }
+
+    $script:KeyHandler = {
+        param($s, $e)
+        if ($e.KeyCode -eq 'Escape') { if(-not $script:isRunning){ $form.Close() }; return }
+        if ($script:isRunning) { return }
+        switch ($e.KeyCode) {
+            'Up'   { $script:selectedIndex = ($script:selectedIndex - 1 + $script:optionCount) % $script:optionCount; Update-Highlight; $e.Handled = $true }
+            'Down' { $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount; Update-Highlight; $e.Handled = $true }
+        }
+    }
+    $form.Add_KeyDown($script:KeyHandler); $panel.Add_KeyDown($script:KeyHandler)
+
+    $scrollHandler = {
+        param($s, $e)
+        if ($script:isRunning) { return }
+        if ($e.Delta -gt 0) { $script:selectedIndex = ($script:selectedIndex - 1 + $script:optionCount) % $script:optionCount }
+        else { $script:selectedIndex = ($script:selectedIndex + 1) % $script:optionCount }
+        Update-Highlight
+    }
+    $form.Add_MouseWheel($scrollHandler); $panel.Add_MouseWheel($scrollHandler)
+    foreach ($ctrl in $panel.Controls) { try { $ctrl.Add_MouseWheel($scrollHandler) } catch {} }
+
+    $form.Add_Shown({ $panel.Focus() })
+    Update-Highlight
+
+    [System.Windows.Forms.Application]::Run($form)
+
 } else {
+    # ───────────────────────────────────────────────
+    # CLI MODE (with -TweakId)
+    # ───────────────────────────────────────────────
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " PRIME — Win10 22H2 Optimizer" -ForegroundColor Cyan
+    Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+
+    $errorLog = @()
     Write-Host ">> Running selected tweaks: $($TweakId -join ', ')" -ForegroundColor Yellow
     Write-Host ""
+
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
     foreach ($id in $TweakId) {
         if ($TweakMap.Contains($id)) {
             try {
@@ -1352,23 +1564,18 @@ if ($runAll) {
             $errorLog += "Tweak ID $id not found"
         }
     }
-}
 
-$stopwatch.Stop()
+    $stopwatch.Stop()
 
-# -- Summary --
-Write-Host ""
-Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
-if ($errorLog.Count -eq 0) {
-    if ($runAll) {
-        Write-Host " DONE — All 75 tweaks applied successfully" -ForegroundColor Green
-    } else {
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
+    if ($errorLog.Count -eq 0) {
         Write-Host " DONE — $($TweakId.Count) tweak(s) applied successfully" -ForegroundColor Green
+    } else {
+        Write-Host " DONE — $($errorLog.Count) error(s)" -ForegroundColor Yellow
+        foreach ($err in $errorLog) { Write-Host "  ! $err" -ForegroundColor Red }
     }
-} else {
-    Write-Host " DONE — $($errorLog.Count) error(s)" -ForegroundColor Yellow
-    foreach ($err in $errorLog) { Write-Host "  ! $err" -ForegroundColor Red }
+    Write-Host " Time: $([math]::Round($stopwatch.Elapsed.TotalSeconds, 1))s" -ForegroundColor Gray
+    Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
 }
-Write-Host " Time: $([math]::Round($stopwatch.Elapsed.TotalSeconds, 1))s" -ForegroundColor Gray
-Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
-Write-Host ""
