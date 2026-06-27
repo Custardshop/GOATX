@@ -1262,7 +1262,7 @@ function Tweak-74_CSRSSPriority {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# [75] DWM Optimization  ← FIX: csrss.exe → dwm.exe
+# [75] DWM Optimization  (FIX: was targeting csrss.exe, now dwm.exe)
 # ═══════════════════════════════════════════════════════════════════
 function Tweak-75_DWMOptimize {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\dwm.exe\PerfOptions" /v CpuPriorityClass /t REG_DWORD /d 4 /f 2>$null | Out-Null
@@ -1274,7 +1274,7 @@ function Tweak-75_DWMOptimize {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# MASTER TABLE — ID → Function mapping
+# MASTER TABLE — ID to Function mapping
 # ═══════════════════════════════════════════════════════════════════
 $TweakMap = [ordered]@{
     1  = @{ Name = "Kernel + Timer (TSC)";       Fn = { Tweak-01_KernelTimer } }
@@ -1353,3 +1353,146 @@ $TweakMap = [ordered]@{
     74 = @{ Name = "CSRSS Priority";             Fn = { Tweak-74_CSRSSPriority } }
     75 = @{ Name = "DWM Optimization";           Fn = { Tweak-75_DWMOptimize } }
 }
+
+# ═══════════════════════════════════════════════════════════════════
+# GUI BUILD — Main window with all 75 tweaks
+# ═══════════════════════════════════════════════════════════════════
+if ($guiMode) {
+
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = "PRIME — Win10 22H2 Optimizer"
+    $form.Size = New-Object System.Drawing.Size(720, 900)
+    $form.StartPosition = "CenterScreen"
+    $form.FormBorderStyle = "FixedSingle"
+    $form.MaximizeBox = $false
+    $form.BackColor = [System.Drawing.Color]::FromArgb(20, 20, 20)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 236, 228)
+    $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+
+    # ── Header Label ──
+    $lblHeader = New-Object System.Windows.Forms.Label
+    $lblHeader.Text = "PRIME — All 75 Tweaks"
+    $lblHeader.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
+    $lblHeader.ForeColor = [System.Drawing.Color]::FromArgb(232, 197, 71)
+    $lblHeader.AutoSize = $true
+    $lblHeader.Location = New-Object System.Drawing.Point(20, 12)
+    $form.Controls.Add($lblHeader)
+
+    # ── Select All button ──
+    $btnSelectAll = New-Object System.Windows.Forms.Button
+    $btnSelectAll.Text = "Select All"
+    $btnSelectAll.Size = New-Object System.Drawing.Size(100, 30)
+    $btnSelectAll.Location = New-Object System.Drawing.Point(20, 50)
+    $btnSelectAll.FlatStyle = "Flat"
+    $btnSelectAll.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 45)
+    $btnSelectAll.ForeColor = [System.Drawing.Color]::FromArgb(240, 236, 228)
+    $form.Controls.Add($btnSelectAll)
+
+    # ── Deselect All button ──
+    $btnDeselectAll = New-Object System.Windows.Forms.Button
+    $btnDeselectAll.Text = "Deselect All"
+    $btnDeselectAll.Size = New-Object System.Drawing.Size(100, 30)
+    $btnDeselectAll.Location = New-Object System.Drawing.Point(130, 50)
+    $btnDeselectAll.FlatStyle = "Flat"
+    $btnDeselectAll.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 45)
+    $btnDeselectAll.ForeColor = [System.Drawing.Color]::FromArgb(240, 236, 228)
+    $form.Controls.Add($btnDeselectAll)
+
+    # ── Run Selected button ──
+    $btnRun = New-Object System.Windows.Forms.Button
+    $btnRun.Text = "RUN SELECTED"
+    $btnRun.Size = New-Object System.Drawing.Size(160, 36)
+    $btnRun.Location = New-Object System.Drawing.Point(530, 47)
+    $btnRun.FlatStyle = "Flat"
+    $btnRun.BackColor = [System.Drawing.Color]::FromArgb(232, 197, 71)
+    $btnRun.ForeColor = [System.Drawing.Color]::FromArgb(20, 20, 20)
+    $btnRun.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+    $form.Controls.Add($btnRun)
+
+    # ── Scrollable Panel for checkboxes ──
+    $panel = New-Object System.Windows.Forms.Panel
+    $panel.Location = New-Object System.Drawing.Point(20, 95)
+    $panel.Size = New-Object System.Drawing.Size(670, 720)
+    $panel.AutoScroll = $true
+    $panel.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    $form.Controls.Add($panel)
+
+    # ── Create one checkbox per tweak ──
+    $checkboxes = @{}
+    $yPos = 8
+    foreach ($key in $TweakMap.Keys) {
+        $cb = New-Object System.Windows.Forms.CheckBox
+        $cb.Text = ("[{0:D2}] {1}" -f $key, $TweakMap[$key].Name)
+        $cb.Tag = $key
+        $cb.AutoSize = $true
+        $cb.Location = New-Object System.Drawing.Point(12, $yPos)
+        $cb.ForeColor = [System.Drawing.Color]::FromArgb(220, 216, 208)
+        $cb.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+        $panel.Controls.Add($cb)
+        $checkboxes[$key] = $cb
+        $yPos += 26
+    }
+
+    # ── Status bar ──
+    $lblStatus = New-Object System.Windows.Forms.Label
+    $lblStatus.Text = "Ready — Select tweaks and click RUN"
+    $lblStatus.Dock = "Bottom"
+    $lblStatus.Height = 28
+    $lblStatus.TextAlign = "MiddleLeft"
+    $lblStatus.ForeColor = [System.Drawing.Color]::FromArgb(160, 156, 148)
+    $lblStatus.BackColor = [System.Drawing.Color]::FromArgb(25, 25, 25)
+    $lblStatus.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+    $form.Controls.Add($lblStatus)
+
+    # ── Select All handler ──
+    $btnSelectAll.Add_Click({
+        foreach ($cb in $checkboxes.Values) { $cb.Checked = $true }
+    })
+
+    # ── Deselect All handler ──
+    $btnDeselectAll.Add_Click({
+        foreach ($cb in $checkboxes.Values) { $cb.Checked = $false }
+    })
+
+    # ── Run handler ──
+    $btnRun.Add_Click({
+        $selected = @()
+        foreach ($key in $checkboxes.Keys | Sort-Object) {
+            if ($checkboxes[$key].Checked) { $selected += $key }
+        }
+        if ($selected.Count -eq 0) {
+            $lblStatus.Text = "No tweaks selected!"
+            return
+        }
+        $btnRun.Enabled = $false
+        $lblStatus.Text = "Running $($selected.Count) tweak(s)..."
+        $form.Refresh()
+
+        $completed = 0
+        $failed = 0
+        foreach ($id in $selected | Sort-Object) {
+            try {
+                $lblStatus.Text = "Running [{0:D2}] {1}..." -f $id, $TweakMap[$id].Name
+                $form.Refresh()
+                & $TweakMap[$id].Fn
+                $completed++
+            } catch {
+                $failed++
+            }
+        }
+
+        $lblStatus.Text = "Done — $completed succeeded, $failed failed"
+        $btnRun.Enabled = $true
+        [System.Windows.Forms.MessageBox]::Show(
+            "Completed: $completed`nFailed: $failed",
+            "PRIME — Results",
+            "OK",
+            "Information"
+        )
+    })
+
+    # ── Show the form ──
+    $form.Add_Shown({ $form.Activate() })
+    [void]$form.ShowDialog()
+
+} # end guiMode
