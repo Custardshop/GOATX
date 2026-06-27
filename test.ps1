@@ -1148,7 +1148,7 @@ function Tweak-66_NTFSDeep {
 # ═══════════════════════════════════════════════════════════════════
 function Tweak-67_CPUScheduling {
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v IRQ8Priority /t REG_DWORD /d 1 /f | Out-Null
-    reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32PrioritySeparation /t REG_DWORD /d 38 /f | Out-Null
+    reg add "HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl" /v Win32PrioritySeparation /t REG_DWORD /d 42 /f | Out-Null
     reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v SecondLevelDataCache /t REG_DWORD /d 0 /f | Out-Null
     try { $hasHDD = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'HDD' } } catch { $hasHDD = $null }
     if ($hasHDD) {
