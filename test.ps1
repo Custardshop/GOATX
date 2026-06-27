@@ -78,7 +78,6 @@ if ($List) {
 $guiMode = (-not $TweakId -or $TweakId.Count -eq 0)
 
 if ($guiMode) {
-    # Hide console window
     Add-Type -Name Win32ShowWindow -Namespace Native -MemberDefinition @"
 [DllImport("user32.dll")]
 public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -335,7 +334,7 @@ function Tweak-15_NetworkDNS {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# [16] Privacy and Telemetry
+# [16] Privacy and Telemetry  ← FIXED: Unicode homoglyphs → ASCII
 # ═══════════════════════════════════════════════════════════════════
 function Tweak-16_PrivacyTelemetry {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
@@ -1262,7 +1261,7 @@ function Tweak-74_CSRSSPriority {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# [75] DWM Optimization  (FIX: was targeting csrss.exe, now dwm.exe)
+# [75] DWM Optimization  ← FIXED: csrss.exe → dwm.exe
 # ═══════════════════════════════════════════════════════════════════
 function Tweak-75_DWMOptimize {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\dwm.exe\PerfOptions" /v CpuPriorityClass /t REG_DWORD /d 4 /f 2>$null | Out-Null
@@ -1274,225 +1273,194 @@ function Tweak-75_DWMOptimize {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# MASTER TABLE — ID to Function mapping
+# MASTER TABLE
 # ═══════════════════════════════════════════════════════════════════
 $TweakMap = [ordered]@{
-    1  = @{ Name = "Kernel + Timer (TSC)";       Fn = { Tweak-01_KernelTimer } }
-    2  = @{ Name = "Timer Resolution";           Fn = { Tweak-02_TimerResolution } }
-    3  = @{ Name = "Process Priority";           Fn = { Tweak-03_ProcessPriority } }
-    4  = @{ Name = "IRQ MSI Mode";               Fn = { Tweak-04_IrqMsiMode } }
-    5  = @{ Name = "Memory Management";          Fn = { Tweak-05_MemoryManagement } }
-    6  = @{ Name = "Storage Optimizations";      Fn = { Tweak-06_Storage } }
-    7  = @{ Name = "Input and USB";              Fn = { Tweak-07_InputUSB } }
-    8  = @{ Name = "Nagle Algorithm";            Fn = { Tweak-08_Nagle } }
-    9  = @{ Name = "Visual Effects";             Fn = { Tweak-09_VisualEffects } }
-    10 = @{ Name = "GameBar DVR + GameMode OFF"; Fn = { Tweak-10_GameBarDVR } }
-    11 = @{ Name = "Processor Power + HP Plan";  Fn = { Tweak-11_ProcessorPower } }
-    12 = @{ Name = "CPU Core Parking";           Fn = { Tweak-12_CoreParking } }
-    13 = @{ Name = "GPU Display (HAGS OFF)";     Fn = { Tweak-13_GpuDisplay } }
-    14 = @{ Name = "Audio Latency";              Fn = { Tweak-14_AudioLatency } }
+    1  = @{ Name = "Kernel + Timer (TSC)";        Fn = { Tweak-01_KernelTimer } }
+    2  = @{ Name = "Timer Resolution";            Fn = { Tweak-02_TimerResolution } }
+    3  = @{ Name = "Process Priority";            Fn = { Tweak-03_ProcessPriority } }
+    4  = @{ Name = "IRQ MSI Mode";                Fn = { Tweak-04_IrqMsiMode } }
+    5  = @{ Name = "Memory Management";           Fn = { Tweak-05_MemoryManagement } }
+    6  = @{ Name = "Storage Optimizations";       Fn = { Tweak-06_Storage } }
+    7  = @{ Name = "Input and USB";               Fn = { Tweak-07_InputUSB } }
+    8  = @{ Name = "Nagle Algorithm";             Fn = { Tweak-08_Nagle } }
+    9  = @{ Name = "Visual Effects";              Fn = { Tweak-09_VisualEffects } }
+    10 = @{ Name = "GameBar DVR + GameMode OFF";  Fn = { Tweak-10_GameBarDVR } }
+    11 = @{ Name = "Processor Power + HP Plan";   Fn = { Tweak-11_ProcessorPower } }
+    12 = @{ Name = "CPU Core Parking";            Fn = { Tweak-12_CoreParking } }
+    13 = @{ Name = "GPU Display (HAGS OFF)";      Fn = { Tweak-13_GpuDisplay } }
+    14 = @{ Name = "Audio Latency";               Fn = { Tweak-14_AudioLatency } }
     15 = @{ Name = "Network + DNS + Stack Reset"; Fn = { Tweak-15_NetworkDNS } }
-    16 = @{ Name = "Privacy and Telemetry";      Fn = { Tweak-16_PrivacyTelemetry } }
-    17 = @{ Name = "Windows Services";           Fn = { Tweak-17_Services } }
-    18 = @{ Name = "Junk and Log Cleanup";       Fn = { Tweak-18_JunkCleanup } }
-    19 = @{ Name = "Interrupt Affinity";         Fn = { Tweak-19_InterruptAffinity } }
-    20 = @{ Name = "NIC Advanced";               Fn = { Tweak-20_NICAdvanced } }
-    21 = @{ Name = "Hyper-V and VBS";           Fn = { Tweak-21_HyperV } }
-    22 = @{ Name = "Timer Resolution Runtime";   Fn = { Tweak-22_TimerResRuntime } }
-    23 = @{ Name = "Spectre and Meltdown";       Fn = { Tweak-23_SpectreMeltdown } }
-    24 = @{ Name = "Memory Compression";         Fn = { Tweak-24_MemCompression } }
-    25 = @{ Name = "NVIDIA Low Latency";         Fn = { Tweak-25_NvidiaLowLatency } }
-    26 = @{ Name = "NVIDIA Shader + ReBAR";      Fn = { Tweak-26_NvidiaShader } }
-    27 = @{ Name = "Exploit Protection";         Fn = { Tweak-27_ExploitProtection } }
-    28 = @{ Name = "Windows Defender";           Fn = { Tweak-28_DefenderRealtime } }
-    29 = @{ Name = "Background Apps";            Fn = { Tweak-29_BackgroundApps } }
-    30 = @{ Name = "Delivery Optimization";      Fn = { Tweak-30_DeliveryOptimization } }
-    31 = @{ Name = "Device Power";               Fn = { Tweak-31_DevicePower } }
-    32 = @{ Name = "GPU Cache Cleanup";          Fn = { Tweak-32_GpuCacheCleanup } }
-    33 = @{ Name = "MPO Disable";                Fn = { Tweak-33_MPODisable } }
-    34 = @{ Name = "PCI-E ASPM";                 Fn = { Tweak-34_PciEAspm } }
-    35 = @{ Name = "Connected Standby";          Fn = { Tweak-35_ConnectedStandby } }
-    36 = @{ Name = "Telemetry Tasks";            Fn = { Tweak-36_TelemetryTasks } }
-    37 = @{ Name = "Windows Ads and Tips";       Fn = { Tweak-37_WindowsAdsTips } }
-    38 = @{ Name = "Additional Services";        Fn = { Tweak-38_AdditionalServices } }
-    39 = @{ Name = "Overlay Killer (GameBar)";   Fn = { Tweak-39_OverlayKiller } }
-    40 = @{ Name = "Network Noise";              Fn = { Tweak-40_NetworkNoise } }
-    41 = @{ Name = "Diagnostic Services";        Fn = { Tweak-41_DiagnosticServices } }
-    42 = @{ Name = "System Restore Off";         Fn = { Tweak-42_SystemRestoreOff } }
-    43 = @{ Name = "Additional Services v2";     Fn = { Tweak-43_AdditionalServices2 } }
-    44 = @{ Name = "Spotlight and Clipboard";    Fn = { Tweak-44_SpotlightClipboard } }
-    45 = @{ Name = "NVIDIA Telemetry";           Fn = { Tweak-45_NvidiaTelemetry } }
-    46 = @{ Name = "News + Copilot Disable";     Fn = { Tweak-46_CopilotRecall } }
-    47 = @{ Name = "Storage Sense + Edge";       Fn = { Tweak-47_StorageEdge } }
-    48 = @{ Name = "Boot and Login Speed";       Fn = { Tweak-48_BootLoginSpeed } }
-    49 = @{ Name = "Autologger Disable";         Fn = { Tweak-49_AutologgerDisable } }
-    50 = @{ Name = "Pagefile Optimize";          Fn = { Tweak-50_PagefileOptimize } }
-    51 = @{ Name = "SmartScreen and AutoPlay";   Fn = { Tweak-51_SmartScreen } }
-    52 = @{ Name = "Scheduled Tasks v2";         Fn = { Tweak-52_ScheduledTasks2 } }
-    53 = @{ Name = "LSO + RSS Queues";           Fn = { Tweak-53_LSOandRSS } }
-    54 = @{ Name = "TCP Window BDP";             Fn = { Tweak-54_TCPWindowTuning } }
-    55 = @{ Name = "WiFi Optimize";              Fn = { Tweak-55_WiFiOptimize } }
-    56 = @{ Name = "TCP Congestion";             Fn = { Tweak-56_TCPCongestion } }
-    57 = @{ Name = "UDP Buffer";                 Fn = { Tweak-57_UDPBuffer } }
-    58 = @{ Name = "NIC Flow + RSS Core";        Fn = { Tweak-58_NICFlowControl } }
-    59 = @{ Name = "QoS + DSCP";                 Fn = { Tweak-59_QoS } }
-    60 = @{ Name = "NIC Power Deep";             Fn = { Tweak-60_NICPowerDeep } }
-    61 = @{ Name = "DNS Cache + Flush";          Fn = { Tweak-61_DNSCache } }
-    62 = @{ Name = "TCP KeepAlive + SYN";        Fn = { Tweak-62_TCPKeepAlive } }
-    63 = @{ Name = "MMCSS Deep Tuning";          Fn = { Tweak-63_MMCSSDeep } }
-    64 = @{ Name = "NVIDIA Profile";             Fn = { Tweak-64_NvidiaProfile } }
-    65 = @{ Name = "USB Power Deep";             Fn = { Tweak-65_USBPowerDeep } }
-    66 = @{ Name = "NTFS Deep";                  Fn = { Tweak-66_NTFSDeep } }
-    67 = @{ Name = "CPU Scheduling Deep";        Fn = { Tweak-67_CPUScheduling } }
-    68 = @{ Name = "VBS/HVCI Core Isolation";    Fn = { Tweak-68_VBSHVCI } }
-    69 = @{ Name = "NVMe Deep";                  Fn = { Tweak-69_NVMeDeep } }
-    70 = @{ Name = "LargeSystemCache + IoPage";  Fn = { Tweak-70_LargeSystemCache } }
-    71 = @{ Name = "Misc Services";              Fn = { Tweak-71_MiscServices } }
-    72 = @{ Name = "UWP Background Disable";     Fn = { Tweak-72_UWPBackgroundDisable } }
-    73 = @{ Name = "ETW Session Disable";        Fn = { Tweak-73_ETWDisable } }
-    74 = @{ Name = "CSRSS Priority";             Fn = { Tweak-74_CSRSSPriority } }
-    75 = @{ Name = "DWM Optimization";           Fn = { Tweak-75_DWMOptimize } }
+    16 = @{ Name = "Privacy and Telemetry";       Fn = { Tweak-16_PrivacyTelemetry } }
+    17 = @{ Name = "Windows Services";            Fn = { Tweak-17_Services } }
+    18 = @{ Name = "Junk and Log Cleanup";        Fn = { Tweak-18_JunkCleanup } }
+    19 = @{ Name = "Interrupt Affinity";          Fn = { Tweak-19_InterruptAffinity } }
+    20 = @{ Name = "NIC Advanced";                Fn = { Tweak-20_NICAdvanced } }
+    21 = @{ Name = "Hyper-V and VBS";            Fn = { Tweak-21_HyperV } }
+    22 = @{ Name = "Timer Resolution Runtime";    Fn = { Tweak-22_TimerResRuntime } }
+    23 = @{ Name = "Spectre and Meltdown";        Fn = { Tweak-23_SpectreMeltdown } }
+    24 = @{ Name = "Memory Compression";          Fn = { Tweak-24_MemCompression } }
+    25 = @{ Name = "NVIDIA Low Latency";          Fn = { Tweak-25_NvidiaLowLatency } }
+    26 = @{ Name = "NVIDIA Shader + ReBAR";       Fn = { Tweak-26_NvidiaShader } }
+    27 = @{ Name = "Exploit Protection";          Fn = { Tweak-27_ExploitProtection } }
+    28 = @{ Name = "Windows Defender";            Fn = { Tweak-28_DefenderRealtime } }
+    29 = @{ Name = "Background Apps";             Fn = { Tweak-29_BackgroundApps } }
+    30 = @{ Name = "Delivery Optimization";       Fn = { Tweak-30_DeliveryOptimization } }
+    31 = @{ Name = "Device Power";                Fn = { Tweak-31_DevicePower } }
+    32 = @{ Name = "GPU Cache Cleanup";           Fn = { Tweak-32_GpuCacheCleanup } }
+    33 = @{ Name = "MPO Disable";                 Fn = { Tweak-33_MPODisable } }
+    34 = @{ Name = "PCI-E ASPM";                  Fn = { Tweak-34_PciEAspm } }
+    35 = @{ Name = "Connected Standby";           Fn = { Tweak-35_ConnectedStandby } }
+    36 = @{ Name = "Telemetry Tasks";             Fn = { Tweak-36_TelemetryTasks } }
+    37 = @{ Name = "Windows Ads and Tips";        Fn = { Tweak-37_WindowsAdsTips } }
+    38 = @{ Name = "Additional Services";         Fn = { Tweak-38_AdditionalServices } }
+    39 = @{ Name = "Overlay Killer (GameBar)";    Fn = { Tweak-39_OverlayKiller } }
+    40 = @{ Name = "Network Noise";               Fn = { Tweak-40_NetworkNoise } }
+    41 = @{ Name = "Diagnostic Services";         Fn = { Tweak-41_DiagnosticServices } }
+    42 = @{ Name = "System Restore Off";          Fn = { Tweak-42_SystemRestoreOff } }
+    43 = @{ Name = "Additional Services v2";      Fn = { Tweak-43_AdditionalServices2 } }
+    44 = @{ Name = "Spotlight and Clipboard";     Fn = { Tweak-44_SpotlightClipboard } }
+    45 = @{ Name = "NVIDIA Telemetry";            Fn = { Tweak-45_NvidiaTelemetry } }
+    46 = @{ Name = "News + Copilot Disable";      Fn = { Tweak-46_CopilotRecall } }
+    47 = @{ Name = "Storage Sense + Edge";        Fn = { Tweak-47_StorageEdge } }
+    48 = @{ Name = "Boot and Login Speed";        Fn = { Tweak-48_BootLoginSpeed } }
+    49 = @{ Name = "Autologger Disable";          Fn = { Tweak-49_AutologgerDisable } }
+    50 = @{ Name = "Pagefile Optimize";           Fn = { Tweak-50_PagefileOptimize } }
+    51 = @{ Name = "SmartScreen and AutoPlay";    Fn = { Tweak-51_SmartScreen } }
+    52 = @{ Name = "Scheduled Tasks v2";          Fn = { Tweak-52_ScheduledTasks2 } }
+    53 = @{ Name = "LSO + RSS Queues";            Fn = { Tweak-53_LSOandRSS } }
+    54 = @{ Name = "TCP Window BDP";              Fn = { Tweak-54_TCPWindowTuning } }
+    55 = @{ Name = "WiFi Optimize";               Fn = { Tweak-55_WiFiOptimize } }
+    56 = @{ Name = "TCP Congestion";              Fn = { Tweak-56_TCPCongestion } }
+    57 = @{ Name = "UDP Buffer";                  Fn = { Tweak-57_UDPBuffer } }
+    58 = @{ Name = "NIC Flow + RSS Core";         Fn = { Tweak-58_NICFlowControl } }
+    59 = @{ Name = "QoS + DSCP";                  Fn = { Tweak-59_QoS } }
+    60 = @{ Name = "NIC Power Deep";              Fn = { Tweak-60_NICPowerDeep } }
+    61 = @{ Name = "DNS Cache + Flush";           Fn = { Tweak-61_DNSCache } }
+    62 = @{ Name = "TCP KeepAlive + SYN";         Fn = { Tweak-62_TCPKeepAlive } }
+    63 = @{ Name = "MMCSS Deep Tuning";           Fn = { Tweak-63_MMCSSDeep } }
+    64 = @{ Name = "NVIDIA Profile";              Fn = { Tweak-64_NvidiaProfile } }
+    65 = @{ Name = "USB Power Deep";              Fn = { Tweak-65_USBPowerDeep } }
+    66 = @{ Name = "NTFS Deep";                   Fn = { Tweak-66_NTFSDeep } }
+    67 = @{ Name = "CPU Scheduling Deep";         Fn = { Tweak-67_CPUScheduling } }
+    68 = @{ Name = "VBS/HVCI Core Isolation";     Fn = { Tweak-68_VBSHVCI } }
+    69 = @{ Name = "NVMe Deep";                   Fn = { Tweak-69_NVMeDeep } }
+    70 = @{ Name = "LargeSystemCache + IoPage";   Fn = { Tweak-70_LargeSystemCache } }
+    71 = @{ Name = "Misc Services";               Fn = { Tweak-71_MiscServices } }
+    72 = @{ Name = "UWP Background Disable";      Fn = { Tweak-72_UWPBackgroundDisable } }
+    73 = @{ Name = "ETW Session Disable";         Fn = { Tweak-73_ETWDisable } }
+    74 = @{ Name = "CSRSS Priority";              Fn = { Tweak-74_CSRSSPriority } }
+    75 = @{ Name = "DWM Optimization";            Fn = { Tweak-75_DWMOptimize } }
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# GUI BUILD — Main window with all 75 tweaks
+# CLI MODE — Run by TweakId
+# ═══════════════════════════════════════════════════════════════════
+if (-not $guiMode) {
+    foreach ($id in $TweakId) {
+        if ($TweakMap.Contains($id)) {
+            try { & $TweakMap[$id].Fn } catch { Write-Host "[ERROR] Tweak $id failed: $_" -ForegroundColor Red }
+        } else {
+            Write-Host "[SKIP] Tweak ID $id not found" -ForegroundColor Yellow
+        }
+    }
+    Write-Host ""
+    Write-Host "Done. Press any key to exit..." -ForegroundColor Cyan
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# GUI MODE
 # ═══════════════════════════════════════════════════════════════════
 if ($guiMode) {
 
     $form = New-Object System.Windows.Forms.Form
-    $form.Text = "PRIME — Win10 22H2 Optimizer"
-    $form.Size = New-Object System.Drawing.Size(720, 900)
+    $form.Text = "PRIME — Win10 22H2 Optimizer (75 Tweaks)"
+    $form.Size = New-Object System.Drawing.Size(740, 900)
     $form.StartPosition = "CenterScreen"
     $form.FormBorderStyle = "FixedSingle"
     $form.MaximizeBox = $false
-    $form.BackColor = [System.Drawing.Color]::FromArgb(20, 20, 20)
-    $form.ForeColor = [System.Drawing.Color]::FromArgb(240, 236, 228)
+    $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
+    $form.ForeColor = [System.Drawing.Color]::FromArgb(230, 230, 230)
     $form.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 
-    # ── Header Label ──
-    $lblHeader = New-Object System.Windows.Forms.Label
-    $lblHeader.Text = "PRIME — All 75 Tweaks"
-    $lblHeader.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
-    $lblHeader.ForeColor = [System.Drawing.Color]::FromArgb(232, 197, 71)
-    $lblHeader.AutoSize = $true
-    $lblHeader.Location = New-Object System.Drawing.Point(20, 12)
-    $form.Controls.Add($lblHeader)
+    $lblTitle = New-Object System.Windows.Forms.Label
+    $lblTitle.Text = "PRIME — Win10 22H2 Optimizer"
+    $lblTitle.Font = New-Object System.Drawing.Font("Segoe UI Semibold", 14)
+    $lblTitle.ForeColor = [System.Drawing.Color]::FromArgb(0, 180, 255)
+    $lblTitle.AutoSize = $true
+    $lblTitle.Location = New-Object System.Drawing.Point(16, 10)
+    $form.Controls.Add($lblTitle)
 
-    # ── Select All button ──
-    $btnSelectAll = New-Object System.Windows.Forms.Button
-    $btnSelectAll.Text = "Select All"
-    $btnSelectAll.Size = New-Object System.Drawing.Size(100, 30)
-    $btnSelectAll.Location = New-Object System.Drawing.Point(20, 50)
-    $btnSelectAll.FlatStyle = "Flat"
-    $btnSelectAll.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 45)
-    $btnSelectAll.ForeColor = [System.Drawing.Color]::FromArgb(240, 236, 228)
-    $form.Controls.Add($btnSelectAll)
+    $btnAll = New-Object System.Windows.Forms.Button
+    $btnAll.Text = "Select All"; $btnAll.Size = New-Object System.Drawing.Size(90, 28)
+    $btnAll.Location = New-Object System.Drawing.Point(16, 44)
+    $btnAll.FlatStyle = "Flat"; $btnAll.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 40)
+    $form.Controls.Add($btnAll)
 
-    # ── Deselect All button ──
-    $btnDeselectAll = New-Object System.Windows.Forms.Button
-    $btnDeselectAll.Text = "Deselect All"
-    $btnDeselectAll.Size = New-Object System.Drawing.Size(100, 30)
-    $btnDeselectAll.Location = New-Object System.Drawing.Point(130, 50)
-    $btnDeselectAll.FlatStyle = "Flat"
-    $btnDeselectAll.BackColor = [System.Drawing.Color]::FromArgb(45, 45, 45)
-    $btnDeselectAll.ForeColor = [System.Drawing.Color]::FromArgb(240, 236, 228)
-    $form.Controls.Add($btnDeselectAll)
+    $btnNone = New-Object System.Windows.Forms.Button
+    $btnNone.Text = "Deselect All"; $btnNone.Size = New-Object System.Drawing.Size(90, 28)
+    $btnNone.Location = New-Object System.Drawing.Point(112, 44)
+    $btnNone.FlatStyle = "Flat"; $btnNone.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 40)
+    $form.Controls.Add($btnNone)
 
-    # ── Run Selected button ──
     $btnRun = New-Object System.Windows.Forms.Button
-    $btnRun.Text = "RUN SELECTED"
-    $btnRun.Size = New-Object System.Drawing.Size(160, 36)
-    $btnRun.Location = New-Object System.Drawing.Point(530, 47)
+    $btnRun.Text = "RUN SELECTED"; $btnRun.Size = New-Object System.Drawing.Size(140, 32)
+    $btnRun.Location = New-Object System.Drawing.Point(575, 42)
     $btnRun.FlatStyle = "Flat"
-    $btnRun.BackColor = [System.Drawing.Color]::FromArgb(232, 197, 71)
-    $btnRun.ForeColor = [System.Drawing.Color]::FromArgb(20, 20, 20)
-    $btnRun.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+    $btnRun.BackColor = [System.Drawing.Color]::FromArgb(0, 180, 255)
+    $btnRun.ForeColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
+    $btnRun.Font = New-Object System.Drawing.Font("Segoe UI", 9.5, [System.Drawing.FontStyle]::Bold)
     $form.Controls.Add($btnRun)
 
-    # ── Scrollable Panel for checkboxes ──
     $panel = New-Object System.Windows.Forms.Panel
-    $panel.Location = New-Object System.Drawing.Point(20, 95)
-    $panel.Size = New-Object System.Drawing.Size(670, 720)
+    $panel.Location = New-Object System.Drawing.Point(16, 82)
+    $panel.Size = New-Object System.Drawing.Size(700, 750)
     $panel.AutoScroll = $true
-    $panel.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    $panel.BackColor = [System.Drawing.Color]::FromArgb(28, 28, 28)
     $form.Controls.Add($panel)
 
-    # ── Create one checkbox per tweak ──
     $checkboxes = @{}
-    $yPos = 8
+    $y = 6
     foreach ($key in $TweakMap.Keys) {
         $cb = New-Object System.Windows.Forms.CheckBox
         $cb.Text = ("[{0:D2}] {1}" -f $key, $TweakMap[$key].Name)
-        $cb.Tag = $key
-        $cb.AutoSize = $true
-        $cb.Location = New-Object System.Drawing.Point(12, $yPos)
-        $cb.ForeColor = [System.Drawing.Color]::FromArgb(220, 216, 208)
-        $cb.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+        $cb.Tag = $key; $cb.AutoSize = $true
+        $cb.Location = New-Object System.Drawing.Point(10, $y)
+        $cb.ForeColor = [System.Drawing.Color]::FromArgb(210, 210, 210)
         $panel.Controls.Add($cb)
         $checkboxes[$key] = $cb
-        $yPos += 26
+        $y += 25
     }
 
-    # ── Status bar ──
     $lblStatus = New-Object System.Windows.Forms.Label
-    $lblStatus.Text = "Ready — Select tweaks and click RUN"
-    $lblStatus.Dock = "Bottom"
-    $lblStatus.Height = 28
+    $lblStatus.Text = "Ready"; $lblStatus.Dock = "Bottom"; $lblStatus.Height = 26
     $lblStatus.TextAlign = "MiddleLeft"
-    $lblStatus.ForeColor = [System.Drawing.Color]::FromArgb(160, 156, 148)
-    $lblStatus.BackColor = [System.Drawing.Color]::FromArgb(25, 25, 25)
+    $lblStatus.ForeColor = [System.Drawing.Color]::FromArgb(140, 140, 140)
+    $lblStatus.BackColor = [System.Drawing.Color]::FromArgb(22, 22, 22)
     $lblStatus.Font = New-Object System.Drawing.Font("Segoe UI", 8)
     $form.Controls.Add($lblStatus)
 
-    # ── Select All handler ──
-    $btnSelectAll.Add_Click({
-        foreach ($cb in $checkboxes.Values) { $cb.Checked = $true }
-    })
+    $btnAll.Add_Click({ foreach ($cb in $checkboxes.Values) { $cb.Checked = $true } })
+    $btnNone.Add_Click({ foreach ($cb in $checkboxes.Values) { $cb.Checked = $false } })
 
-    # ── Deselect All handler ──
-    $btnDeselectAll.Add_Click({
-        foreach ($cb in $checkboxes.Values) { $cb.Checked = $false }
-    })
-
-    # ── Run handler ──
     $btnRun.Add_Click({
-        $selected = @()
-        foreach ($key in $checkboxes.Keys | Sort-Object) {
-            if ($checkboxes[$key].Checked) { $selected += $key }
-        }
-        if ($selected.Count -eq 0) {
-            $lblStatus.Text = "No tweaks selected!"
-            return
-        }
+        $sel = @()
+        foreach ($k in ($checkboxes.Keys | Sort-Object)) { if ($checkboxes[$k].Checked) { $sel += $k } }
+        if ($sel.Count -eq 0) { $lblStatus.Text = "No tweaks selected!"; return }
         $btnRun.Enabled = $false
-        $lblStatus.Text = "Running $($selected.Count) tweak(s)..."
-        $form.Refresh()
-
-        $completed = 0
-        $failed = 0
-        foreach ($id in $selected | Sort-Object) {
-            try {
-                $lblStatus.Text = "Running [{0:D2}] {1}..." -f $id, $TweakMap[$id].Name
-                $form.Refresh()
-                & $TweakMap[$id].Fn
-                $completed++
-            } catch {
-                $failed++
-            }
+        $ok = 0; $fail = 0
+        foreach ($id in ($sel | Sort-Object)) {
+            $lblStatus.Text = "Running [{0:D2}] {1}..." -f $id, $TweakMap[$id].Name
+            $form.Refresh()
+            try { & $TweakMap[$id].Fn; $ok++ } catch { $fail++ }
         }
-
-        $lblStatus.Text = "Done — $completed succeeded, $failed failed"
+        $lblStatus.Text = "Done — $ok OK, $fail failed"
         $btnRun.Enabled = $true
-        [System.Windows.Forms.MessageBox]::Show(
-            "Completed: $completed`nFailed: $failed",
-            "PRIME — Results",
-            "OK",
-            "Information"
-        )
+        [System.Windows.Forms.MessageBox]::Show("Completed: $ok`nFailed: $fail", "PRIME — Results", "OK", "Information")
     })
 
-    # ── Show the form ──
     $form.Add_Shown({ $form.Activate() })
     [void]$form.ShowDialog()
-
-} # end guiMode
+}
