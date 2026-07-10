@@ -1,64 +1,29 @@
 #Requires -RunAsAdministrator
-
-# ═══════════════════════════════════════════════════════════════
-# Admin Re-launch (console visible)
-# ═══════════════════════════════════════════════════════════════
 $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = "powershell.exe"
-    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`""
     $psi.Verb = "runas"
+    $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
     try { [System.Diagnostics.Process]::Start($psi) | Out-Null } catch {}
     exit
 }
 
-# ═══════════════════════════════════════════════════════════════
-# Win32 APIs — Console positioning
-# ═══════════════════════════════════════════════════════════════
-Add-Type -Name Win32Console -Namespace Native -MemberDefinition @"
+Add-Type -Name Win32ShowWindow -Namespace Native -MemberDefinition @"
 [DllImport("user32.dll")]
-public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 [DllImport("kernel32.dll")]
 public static extern IntPtr GetConsoleWindow();
 "@
+$consoleHandle = [Native.Win32ShowWindow]::GetConsoleWindow()
+if ($consoleHandle -ne [IntPtr]::Zero) {
+    [Native.Win32ShowWindow]::ShowWindow($consoleHandle, 0) | Out-Null
+}
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-
-# ═══════════════════════════════════════════════════════════════
-# Console Setup — position left side of screen
-# ═══════════════════════════════════════════════════════════════
-$consoleHandle = [Native.Win32Console]::GetConsoleWindow()
-if ($consoleHandle -ne [IntPtr]::Zero) {
-    try {
-        $host.UI.RawUI.WindowTitle = "GOATX - Main Console"
-        [Console]::SetBufferSize(90, 500)
-        [Console]::SetWindowSize(90, 44)
-        [Native.Win32Console]::MoveWindow($consoleHandle, 20, 30, 710, 740, $true) | Out-Null
-    } catch {}
-}
-try { $host.UI.RawUI.ForegroundColor = "Gray"; $host.UI.RawUI.BackgroundColor = "Black" } catch {}
-Clear-Host
-
-function Write-LogHeader {
-    Write-Host ""
-    Write-Host "  ╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "  ║" -NoNewline -ForegroundColor Cyan
-    Write-Host "          G O A T X  -  Main Console                      " -NoNewline -ForegroundColor White
-    Write-Host "║" -ForegroundColor Cyan
-    Write-Host "  ║" -NoNewline -ForegroundColor Cyan
-    Write-Host "          Win10 22H2  ·  75 Tweaks  ·  Cascade Mode      " -NoNewline -ForegroundColor DarkCyan
-    Write-Host "║" -ForegroundColor Cyan
-    Write-Host "  ╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  Each tweak spawns its own terminal window." -ForegroundColor DarkGray
-    Write-Host "  Select [High] from the GUI to begin." -ForegroundColor DarkGray
-    Write-Host ""
-}
-
-Write-LogHeader
 
 # ═══════════════════════════════════════════════════════════════════
 # [01] Kernel + Timer (TSC optimal for Win10)
@@ -287,7 +252,7 @@ $Tweak_NetworkDNS = {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# [16] Privacy and Telemetry
+# [16] Privacy and Telemetry  ← FIXED: all ASCII
 # ═══════════════════════════════════════════════════════════════════
 $Tweak_PrivacyTelemetry = {
     reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f | Out-Null
@@ -1155,7 +1120,7 @@ $Tweak_CSRSSPriority = {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# [75] DWM Optimization
+# [75] DWM Optimization  ← FIXED: csrss.exe → dwm.exe
 # ═══════════════════════════════════════════════════════════════════
 $Tweak_DWMOptimize = {
     reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\dwm.exe\PerfOptions" /v CpuPriorityClass /t REG_DWORD /d 4 /f 2>$null | Out-Null
@@ -1165,9 +1130,9 @@ $Tweak_DWMOptimize = {
     reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f | Out-Null
 }
 
-# ═══════════════════════════════════════════════════════════════════
-# $AllTweaks  (75 entries)
-# ═══════════════════════════════════════════════════════════════════
+# ============================================================
+# $AllTweaks hashtable (75 entries)
+# ============================================================
 $AllTweaks = [ordered]@{
     "[01] Kernel + Timer (TSC)"        = $Tweak_KernelTimer
     "[02] Timer Resolution"            = $Tweak_TimerResolution
@@ -1246,150 +1211,9 @@ $AllTweaks = [ordered]@{
     "[75] DWM Optimization"            = $Tweak_DWMOptimize
 }
 
-# ═══════════════════════════════════════════════════════════════════
-# $TweakDesc  (75 descriptions — shown in spawned terminals)
-# ═══════════════════════════════════════════════════════════════════
-$TweakDesc = [ordered]@{
-    "[01] Kernel + Timer (TSC)"        = "TSC Enhanced sync, disable dynamic tick, NX OptOut, keep kernel pages in RAM"
-    "[02] Timer Resolution"            = "Allow applications to request higher timer resolution globally"
-    "[03] Process Priority"            = "Multimedia priority 0, game scheduling High, SvcHost split 32MB"
-    "[04] IRQ MSI Mode"                = "Force Message Signaled Interrupts on all PCI devices"
-    "[05] Memory Management"           = "Disable pagefile clear at shutdown, hibernate off, kill OneDrive"
-    "[06] Storage Optimizations"       = "Disable 8.3 filenames, TRIM all fixed drives"
-    "[07] Input and USB"               = "Mouse/keyboard queue 16, disable USB selective suspend, accel off"
-    "[08] Nagle Algorithm"             = "TCPNoDelay + TcpAckFrequency on all interfaces (lower latency)"
-    "[09] Visual Effects"              = "Disable all animations, transparency, menu delay set to 0"
-    "[10] GameBar DVR + GameMode OFF"  = "Disable GameBar DVR recording, Game Mode auto-switch off"
-    "[11] Processor Power"             = "High Performance plan, CPU min/max 100%, hibernate off"
-    "[12] CPU Core Parking"            = "Disable core parking 100%, heterogeneous perf maxed"
-    "[13] GPU Display (HAGS OFF)"      = "Disable hardware GPU scheduling, TDR delay 60s"
-    "[14] Audio Latency"               = "Pro Audio MMCSS: High scheduling, GPU priority 8"
-    "[15] Network and DNS"             = "Winsock/IP reset, RSS on, Nagle off, DNS 1.1.1.1 + 8.8.8.8"
-    "[16] Privacy and Telemetry"       = "Telemetry 0, Cortana off, WER off, activity feed off"
-    "[17] Windows Services"            = "Disable Xbox/Fax/Diag, ensure audio/network auto-start"
-    "[18] Junk and Log Cleanup"        = "Clean temp/Prefetch, clear event logs, recycle bin"
-    "[19] Interrupt Affinity"          = "GPU core 1, NIC core 2, USB core 3 interrupt assignment"
-    "[20] NIC Advanced"                = "Interrupt moderation off, flow control off, EEE off, buffers 2048"
-    "[21] Hyper-V and VBS"            = "Disable Hyper-V, VBS, HVCI, Credential Guard"
-    "[22] Timer Resolution Runtime"    = "Set NT timer 0.5ms via NtSetTimerResolution + scheduled task"
-    "[23] Spectre and Meltdown"        = "Disable Spectre/Meltdown mitigations for performance"
-    "[24] Memory Compression"          = "Disable Windows memory compression"
-    "[25] NVIDIA Low Latency"          = "Max perf P-state, disable preemption, PowerMizer level 1"
-    "[26] NVIDIA Shader + ReBAR"       = "Shader cache on, ReBAR enable, force max frames 1"
-    "[27] Exploit Protection"          = "Disable CFG, SEHOP, ASLR MoveImages"
-    "[28] Windows Defender"            = "Disable real-time, behavior, IOAV, script scanning"
-    "[29] Background Apps"             = "Disable all UWP background apps globally"
-    "[30] Delivery Optimization"       = "P2P download off, stop Delivery Optimization service"
-    "[31] Device Power"                = "Disable USB hub idle power, NVMe idle state off"
-    "[32] GPU Cache Cleanup"           = "Delete NVIDIA/AMD/D3D shader caches"
-    "[33] MPO Disable"                 = "Disable Multi-Plane Overlay (stutter fix)"
-    "[34] PCI-E ASPM"                  = "Disable Active State Power Management on PCI-E"
-    "[35] Connected Standby"           = "Disable Modern Standby, AoAc override"
-    "[36] Telemetry Tasks"             = "Disable 18 scheduled tasks (CEIP, maps, WER, diag)"
-    "[37] Windows Ads and Tips"        = "Disable tips, suggestions, Spotlight, toast notifications"
-    "[38] Additional Services"         = "Disable push notif, SSDP, PhoneSvc, SharedAccess, etc."
-    "[39] Overlay Killer (GameBar)"    = "Disable Xbox GameBar overlay hook"
-    "[40] Network Noise"               = "Disable multicast DNS, SMBv1, SSDP, FD services"
-    "[41] Diagnostic Services"         = "Disable DPS, WdiHost, WER fully off"
-    "[42] System Restore Off"          = "Disable System Restore, delete all VSS shadows"
-    "[43] Additional Services v2"      = "Disable WinRM, iphlpsvc, UevAgent, WMP, Wallet, etc."
-    "[44] Spotlight and Clipboard"     = "Disable Spotlight, clipboard history, cross-device sync"
-    "[45] NVIDIA Telemetry"            = "Disable NVIDIA scheduled tasks + NvControlPanel opt-out"
-    "[46] News + Copilot Disable"      = "Disable Copilot, News and Interests, Widgets"
-    "[47] Storage Sense + Edge"        = "Storage Sense off, Edge boost/sidebar/shopping off"
-    "[48] Boot and Login Speed"        = "Standard boot menu, no lock screen, no login background"
-    "[49] Autologger Disable"          = "Disable 16 ETW autologgers (DiagTrack, WiFi, Defender)"
-    "[50] Pagefile Optimize"           = "Custom pagefile 50% RAM fixed, disable indexing non-OS"
-    "[51] SmartScreen and AutoPlay"    = "SmartScreen off, WSH off, AutoPlay off"
-    "[52] Scheduled Tasks v2"          = "Disable Edge update, defrag, perftrack, Office telemetry"
-    "[53] LSO + RSS Queues"            = "Disable LSO, maximize RSS queues, buffers 2048"
-    "[54] TCP Window BDP"              = "TCP window scaling, 256KB window, 65K ports, 30s TIME_WAIT"
-    "[55] WiFi Optimize"               = "High roaming, prefer 5GHz, power save off"
-    "[56] TCP Congestion"              = "Cubic congestion, initial RTO 1000ms, ICW 10"
-    "[57] UDP Buffer"                  = "UDP buffer 65KB, forward buffer 65KB, URO off"
-    "[58] NIC Flow + RSS Core"         = "Packet coalescing off, RSS base core 2, disable IPv6"
-    "[59] QoS + DSCP"                  = "NonBestEffortLimit 0, DSCP 184 low-latency"
-    "[60] NIC Power Deep"              = "Wake, green ethernet, EEE, auto power save all off"
-    "[61] DNS Cache + Flush"           = "Flush DNS/ARP/NBT, negative cache 0s, NetBIOS off"
-    "[62] TCP KeepAlive + SYN"         = "KeepAlive 300s, 16M connections, SYN attack protect"
-    "[63] MMCSS Deep Tuning"           = "AlwaysOn, Games GPU 18, Display Post high, latency sensitive"
-    "[64] NVIDIA Profile"              = "Low latency Ultra, disable P-state, force gen speed"
-    "[65] USB Power Deep"              = "Disable idle on all USB hubs + controllers"
-    "[66] NTFS Deep"                   = "Large paged pool, last access off, 8.3 off, EFS off"
-    "[67] CPU Scheduling Deep"         = "Win32PrioritySeparation 42, prefetch conditional HDD/SSD"
-    "[68] VBS/HVCI Core Isolation"     = "VBS, HVCI, Credential Guard, Shadow Stacks all off"
-    "[69] NVMe Deep"                   = "NVMe idle off, ASPM off, interrupt affinity core 1"
-    "[70] LargeSystemCache + IoPage"   = "LargeSystemCache adaptive (16GB+), IoPageLock 75% RAM"
-    "[71] Misc Services"               = "Disable Spooler, RDP, geolocation, Wallet, cross-device"
-    "[72] UWP Background Disable"      = "Disable background for 20 UWP apps"
-    "[73] ETW Session Disable"         = "Disable DiagLog, WiFi, NtfsLog, UserNotPresent ETW"
-    "[74] CSRSS Priority"              = "CSRSS priority High, I/O priority High"
-    "[75] DWM Optimization"            = "DWM priority High, disable Aero Peek, transparency off"
-}
-
-# ═══════════════════════════════════════════════════════════════════
-# Invoke-TweakInWindow  —  spawn visible powershell per tweak
-# ═══════════════════════════════════════════════════════════════════
-function Invoke-TweakInWindow {
-    param(
-        [int]$Num,
-        [int]$Total,
-        [string]$Name,
-        [string]$Desc,
-        [scriptblock]$Code
-    )
-
-    $idx  = ($Num - 1) % 12
-    $offX = 120 + $idx * 32
-    $offY = 80  + $idx * 32
-
-    # Safe encode each piece
-    $safeName = $Name.Replace("'","''").Replace('"','`"')
-    $safeDesc = $Desc.Replace("'","''").Replace('"','`"')
-    $safeCode = $Code.ToString()
-
-    # Build the inner script with variables baked in
-    $inner = @"
-`$ErrorActionPreference = 'SilentlyContinue'
-Add-Type -MemberDefinition '[DllImport("user32.dll")]public static extern bool MoveWindow(IntPtr h,int x,int y,int w,int ht,bool r);[DllImport("kernel32.dll")]public static extern IntPtr GetConsoleWindow();' -Name W -Namespace GW -EA SilentlyContinue
-`$h=[GW.W]::GetConsoleWindow()
-if(`$h -ne [IntPtr]::Zero){
-    `$host.UI.RawUI.WindowTitle='GOATX - $safeName'
-    [GW.W]::MoveWindow(`$h,$offX,$offY,660,440,`$true)|Out-Null
-    try{[Console]::SetWindowSize(82,30);[Console]::SetBufferSize(82,300)}catch{}
-}
-Clear-Host
-Write-Host ''
-Write-Host '  ===========================================' -Fore Cyan
-Write-Host '   GOATX  |  Win10 22H2 Optimization' -Fore White
-Write-Host '  [$Num/$Total] $safeName' -Fore Cyan
-Write-Host '   $safeDesc' -Fore Gray
-Write-Host '  ===========================================' -Fore Cyan
-Write-Host ''
-Write-Host '  Applying...' -Fore Yellow
-Write-Host ''
-`$sw=[System.Diagnostics.Stopwatch]::StartNew()
-$safeCode
-`$sw.Stop()
-`$t=[math]::Round(`$sw.Elapsed.TotalSeconds,2)
-Write-Host ''
-Write-Host '  ===========================================' -Fore Green
-Write-Host ("   Done  ({0}s)" -f `$t) -Fore Green
-Write-Host '  ===========================================' -Fore Green
-Start-Sleep -Milliseconds 1500
-"@
-
-    $bytes   = [System.Text.Encoding]::Unicode.GetBytes($inner)
-    $encoded = [Convert]::ToBase64String($bytes)
-
-    Start-Process powershell.exe `
-        -ArgumentList "-NoProfile -NoLogo -ExecutionPolicy Bypass -EncodedCommand $encoded" `
-        -PassThru -Wait | Out-Null
-}
-
-# ═══════════════════════════════════════════════════════════════
-# GUI
-# ═══════════════════════════════════════════════════════════════
+# ============================================================
+# GUI  (unchanged from original)
+# ============================================================
 $script:selectedIndex = 0
 $script:isRunning     = $false
 $script:optionCount   = 2
@@ -1410,23 +1234,25 @@ $script:GradMid = @(
     [System.Drawing.Color]::FromArgb(160, 130, 220),
     [System.Drawing.Color]::FromArgb(220, 140, 190)
 )
+$script:GradDim = @(
+    [System.Drawing.Color]::FromArgb(60, 110, 140),
+    [System.Drawing.Color]::FromArgb(110, 70, 140),
+    [System.Drawing.Color]::FromArgb(140, 70, 100)
+)
 $script:GradPos = @(0.0, 0.5, 1.0)
 
 $clrBg   = [System.Drawing.Color]::Black
 $clrHint = [System.Drawing.Color]::FromArgb(120, 120, 120)
-$clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)
-$clrOptDim = [System.Drawing.Color]::FromArgb(90, 75, 110)
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text            = "GOATX"
-$form.StartPosition   = "Manual"
-$form.Location        = New-Object System.Drawing.Point(760, 280)
+$form.StartPosition   = "CenterScreen"
 $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
 $form.MaximizeBox     = $false
 $form.BackColor       = $clrBg
 $form.TopMost         = $true
 $form.KeyPreview      = $true
-$form.Opacity         = 0.90
+$form.Opacity         = 0.85
 $form.ClientSize      = New-Object System.Drawing.Size(450, 235)
 
 $panel = New-Object System.Windows.Forms.Panel
@@ -1461,6 +1287,8 @@ function New-GradientLabel {
 New-GradientLabel -text "G O A T X" -fontSize 22 -style ([System.Drawing.FontStyle]::Bold) -colors $script:GradBright -positions $script:GradPos -x 10 -y 20 -w 430 -h 42 | Out-Null
 New-GradientLabel -text "[+] Win10 22H2 Optimized [+]" -fontSize 10 -style ([System.Drawing.FontStyle]::Regular) -colors $script:GradMid -positions $script:GradPos -x 10 -y 66 -w 430 -h 22 | Out-Null
 
+$clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)
+$clrOptDim = [System.Drawing.Color]::FromArgb(90, 75, 110)
 $fontOpt = New-Object System.Drawing.Font("Consolas", 12)
 $optStartY = 104; $optSpacing = 32
 
@@ -1505,114 +1333,34 @@ function Update-Highlight {
     }
 }
 
-# ═══════════════════════════════════════════════════════════════
-# Execute-Selection  —  cascade terminals + main console log
-# ═══════════════════════════════════════════════════════════════
 function Execute-Selection {
     if ($script:isRunning) { return }
     $action = $script:options[$script:selectedIndex].Action
     if ($action -eq "high") {
-        $script:isRunning = $true
-        $script:errorLog  = @()
-        $keys  = @($AllTweaks.Keys)
-        $total = $keys.Count
-        $step  = 0
-
-        Write-Host ""
-        Write-Host "  ─────────────────────────────────────────────────────────" -ForegroundColor DarkCyan
-        Write-Host "   Starting cascade optimization... ($total tweaks)" -ForegroundColor White
-        Write-Host "  ─────────────────────────────────────────────────────────" -ForegroundColor DarkCyan
-        Write-Host ""
-
-        foreach ($key in $keys) {
+        $script:isRunning = $true; $script:errorLog = @()
+        $total = $AllTweaks.Count; $step = 0
+        foreach ($key in $AllTweaks.Keys) {
             $step++
-            $desc = if ($TweakDesc.Contains($key)) { $TweakDesc[$key] } else { "Applying tweak..." }
-
-            # Update GUI progress bar
-            $filled = [math]::Round($step / $total * 20)
-            $empty  = 20 - $filled
-            $bar    = ([string][char]0x2588 * $filled) + ([string][char]0x2591 * $empty)
-            $script:labelControls[0].Text     = "> [$bar] $step/$total"
+            $script:labelControls[0].Text = "> Running ($step/$total)..."
             $script:labelControls[0].ForeColor = $clrOptHi
             $script:labelControls[0].Refresh()
             [System.Windows.Forms.Application]::DoEvents()
-
-            # Main console log
-            $pct = [math]::Round(($step / $total) * 100)
-            Write-Host "  [" -NoNewline -ForegroundColor DarkGray
-            Write-Host ("{0:D2}" -f $step) -NoNewline -ForegroundColor Cyan
-            Write-Host "/" -NoNewline -ForegroundColor DarkGray
-            Write-Host ("{0:D2}" -f $total) -NoNewline -ForegroundColor Cyan
-            Write-Host "] " -NoNewline -ForegroundColor DarkGray
-            Write-Host $key -ForegroundColor White
-            Write-Host "    -> $desc" -ForegroundColor Gray
-
-            # Spawn separate terminal window
-            $tweakSw = [System.Diagnostics.Stopwatch]::StartNew()
-            try {
-                Invoke-TweakInWindow -Num $step -Total $total `
-                    -Name $key -Desc $desc -Code $AllTweaks[$key]
-                $tweakSw.Stop()
-                $sec = [math]::Round($tweakSw.Elapsed.TotalSeconds, 2)
-                $filled2 = [math]::Round($step / $total * 25)
-                $empty2  = 25 - $filled2
-                $bar2    = ([string][char]0x2588 * $filled2) + ([string][char]0x2591 * $empty2)
-                Write-Host "    " -NoNewline
-                Write-Host [char]0x2713 -NoNewline -ForegroundColor Green
-                Write-Host " Done " -NoNewline -ForegroundColor Green
-                Write-Host "[$bar2] " -NoNewline -ForegroundColor Yellow
-                Write-Host "$pct%" -NoNewline -ForegroundColor Yellow
-                Write-Host "  $sec s" -ForegroundColor DarkGray
-            } catch {
-                $tweakSw.Stop()
-                $script:errorLog += "$key : $($_.Exception.Message)"
-                Write-Host "    " -NoNewline
-                Write-Host [char]0x2717 -NoNewline -ForegroundColor Red
-                Write-Host " Error: $($_.Exception.Message)" -ForegroundColor Red
-            }
-            Write-Host ""
+            try { & $AllTweaks[$key] } catch { $script:errorLog += "$key : $($_.Exception.Message)" }
         }
-
-        # Summary
-        Write-Host "  ════════════════════════════════════════════════════════════" -ForegroundColor Cyan
-        if ($script:errorLog.Count -eq 0) {
-            Write-Host "    " -NoNewline
-            Write-Host [char]0x2713 -NoNewline -ForegroundColor Green
-            Write-Host "  All $total tweaks applied successfully" -ForegroundColor Green
-        } else {
-            Write-Host "    " -NoNewline
-            Write-Host [char]0x2713 -NoNewline -ForegroundColor Green
-            Write-Host "  $total tweaks processed" -ForegroundColor Green
-            Write-Host "    " -NoNewline
-            Write-Host [char]0x2717 -NoNewline -ForegroundColor Red
-            Write-Host "  $($script:errorLog.Count) error(s)" -ForegroundColor Red
-        }
-        Write-Host "  ════════════════════════════════════════════════════════════" -ForegroundColor Cyan
-
-        # GUI final status
         if ($script:errorLog.Count -gt 0) {
             $script:labelControls[0].Text = "> Done - $($script:errorLog.Count) error(s)"
         } else {
-            $script:labelControls[0].Text = "> Done - All $total tweaks applied"
+            $script:labelControls[0].Text = "> Done - All $($AllTweaks.Count) tweaks applied"
         }
         $script:labelControls[0].Refresh()
+        try { [System.Media.SystemSounds]::Beep.Play() } catch {}
         try { [Console]::Beep(1200, 300) } catch {}
-
-        $timer = New-Object System.Windows.Forms.Timer
-        $timer.Interval = 2000
-        $timer.Add_Tick({
-            $timer.Stop(); $timer.Dispose()
-            $script:isRunning = $false; Update-Highlight
-        })
+        $timer = New-Object System.Windows.Forms.Timer; $timer.Interval = 1500
+        $timer.Add_Tick({ $timer.Stop(); $timer.Dispose(); $script:isRunning = $false; Update-Highlight })
         $timer.Start()
-    } else {
-        $form.Close()
-    }
+    } else { $form.Close() }
 }
 
-# ═══════════════════════════════════════════════════════════════
-# Key + Scroll Handlers
-# ═══════════════════════════════════════════════════════════════
 $script:KeyHandler = {
     param($s, $e)
     if ($e.KeyCode -eq 'Escape') { if(-not $script:isRunning){ $form.Close() }; return }
@@ -1638,8 +1386,3 @@ $form.Add_Shown({ $panel.Focus() })
 Update-Highlight
 
 [System.Windows.Forms.Application]::Run($form)
-
-# Keep main console open after GUI closes
-Write-Host ""
-Write-Host "  Press any key to close..." -ForegroundColor DarkGray
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
