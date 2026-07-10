@@ -1284,8 +1284,8 @@ function New-GradientLabel {
     $panel.Controls.Add($pnl); return $pnl
 }
 
-New-GradientLabel -text "G O A T X" -fontSize 22 -style ([System.Drawing.FontStyle]::Bold) -colors $script:GradBright -positions $script:GradPos -x 10 -y 20 -w 430 -h 42 | Out-Null
-New-GradientLabel -text "[+] Win10 22H2 Optimized [+]" -fontSize 10 -style ([System.Drawing.FontStyle]::Regular) -colors $script:GradMid -positions $script:GradPos -x 10 -y 66 -w 430 -h 22 | Out-Null
+New-GradientLabel -text "P R I M E" -fontSize 22 -style ([System.Drawing.FontStyle]::Bold) -colors $script:GradBright -positions $script:GradPos -x 10 -y 20 -w 430 -h 42 | Out-Null
+New-GradientLabel -text "[+] God of Latency [+]" -fontSize 10 -style ([System.Drawing.FontStyle]::Regular) -colors $script:GradMid -positions $script:GradPos -x 10 -y 66 -w 430 -h 22 | Out-Null
 
 $clrOptHi  = [System.Drawing.Color]::FromArgb(130, 160, 255)
 $clrOptDim = [System.Drawing.Color]::FromArgb(90, 75, 110)
